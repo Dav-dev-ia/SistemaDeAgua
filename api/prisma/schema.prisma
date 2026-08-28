@@ -1,0 +1,141 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Para desarrollo local usamos sqlite.
+// Para desplegar en Vercel de forma definitiva, debes cambiar provider a "postgresql"
+// y conectar a una base de datos en Neon.tech o Supabase.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            Int        @id @default(autoincrement())
+  username      String     @unique
+  fullName      String
+  passwordHash  String
+  role          String     @default("OWNER")
+  isActive      Boolean    @default(true)
+  apartmentId   Int?
+  createdAt     DateTime   @default(now())
+
+  apartment     Apartment? @relation(fields: [apartmentId], references: [id])
+  payments      Payment[]  @relation("UserPayments")
+
+  @@map("users")
+}
+
+model Apartment {
+  id           Int        @id @default(autoincrement())
+  block        String
+  number       String
+  ownerName    String
+  phone        String?
+  coefficient  Float      @default(1.0)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  users        User[]
+  meters       Meter[]
+  readings     Reading[]
+  allocations  Allocation[]
+
+  @@unique([block, number], name: "uq_apartment_block_number")
+  @@map("apartments")
+}
+
+model Meter {
+  id           Int        @id @default(autoincrement())
+  code         String     @unique
+  apartmentId  Int
+  isInverted   Boolean    @default(false)
+  isActive     Boolean    @default(true)
+  metadataJson String?    // SQLite JSON support as string, or use Prisma Json if Postgres
+  createdAt    DateTime   @default(now())
+
+  apartment    Apartment  @relation(fields: [apartmentId], references: [id])
+  readings     Reading[]
+
+  @@map("meters")
+}
+
+model BillingPeriod {
+  id                           Int        @id @default(autoincrement())
+  code                         String     @unique
+  totalCommonAmountBs          Float      @default(0)
+  generalMetersJson            String?    
+  generalTotalConsumptionM3    Float      @default(0)
+  totalIndividualConsumptionM3 Float      @default(0)
+  commonDifferenceM3           Float      @default(0)
+  distributedTotalBs           Float      @default(0)
+  status                       String     @default("OPEN")
+  notesJson                    String?    
+  closedAt                     DateTime?
+  createdAt                    DateTime   @default(now())
+
+  readings                     Reading[]
+  allocations                  Allocation[]
+
+  @@map("billing_periods")
+}
+
+model Reading {
+  id              Int        @id @default(autoincrement())
+  periodId        Int
+  apartmentId     Int
+  meterId         Int
+  previousReading Float
+  currentReading  Float
+  consumptionM3   Float
+  capturedAt      DateTime   @default(now())
+  sourceJson      String?
+
+  period          BillingPeriod @relation(fields: [periodId], references: [id])
+  apartment       Apartment     @relation(fields: [apartmentId], references: [id])
+  meter           Meter         @relation(fields: [meterId], references: [id])
+
+  @@unique([periodId, meterId], name: "uq_period_meter")
+  @@map("readings")
+}
+
+model Allocation {
+  id              Int        @id @default(autoincrement())
+  periodId        Int
+  apartmentId     Int
+  consumptionM3   Float      @default(0)
+  percentageShare Float      @default(0)
+  amountDueBs     Float      @default(0)
+  amountPaidBs    Float      @default(0)
+  status          String     @default("PENDIENTE")
+  breakdownJson   String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  period          BillingPeriod @relation(fields: [periodId], references: [id])
+  apartment       Apartment     @relation(fields: [apartmentId], references: [id])
+  payments        Payment[]
+
+  @@unique([periodId, apartmentId], name: "uq_period_apartment")
+  @@map("allocations")
+}
+
+model Payment {
+  id                   Int        @id @default(autoincrement())
+  allocationId         Int
+  amountBs             Float
+  paymentMethod        String     @default("EFECTIVO")
+  reference            String?
+  notesJson            String?
+  registeredByUserId   Int?
+  createdAt            DateTime   @default(now())
+
+  allocation           Allocation @relation(fields: [allocationId], references: [id])
+  registeredByUser     User?      @relation("UserPayments", fields: [registeredByUserId], references: [id])
+
+  @@map("payments")
+}
