@@ -14,8 +14,8 @@ export default function Dashboard() {
           client.get('/admin/dashboard'),
           client.get('/admin/periods'),
         ]);
-        if (dashRes.data.ok) setSummary(dashRes.data.summary);
-        if (periodRes.data.ok) setPeriods(periodRes.data.items.slice(0, 5));
+        if (dashRes.data.ok) setSummary(dashRes.data.stats);
+        if (periodRes.data.ok) setPeriods((periodRes.data.items || []).slice(0, 5));
       } catch (err) {
         console.error(err);
       } finally {
@@ -30,10 +30,10 @@ export default function Dashboard() {
   }
 
   const kpis = summary ? [
-    { label: 'Departamentos', value: summary.total_apartments, icon: 'bi-building', color: 'primary' },
-    { label: 'Periodos', value: summary.total_periods, icon: 'bi-calendar3', color: 'info' },
-    { label: 'Pagos Pendientes', value: summary.pending_allocations, icon: 'bi-clock-history', color: 'warning' },
-    { label: 'Pagos Completados', value: summary.paid_allocations, icon: 'bi-check-circle', color: 'success' },
+    { label: 'Departamentos', value: summary.total_apartments ?? 0, icon: 'bi-building', color: 'primary' },
+    { label: 'Periodo Activo', value: summary.active_period ?? 'Ninguno', icon: 'bi-calendar3', color: 'info' },
+    { label: 'Total Cobrado', value: `${(summary.total_collected ?? 0).toFixed(2)} Bs`, icon: 'bi-cash', color: 'success' },
+    { label: 'Por Cobrar', value: `${(summary.pending_collection ?? 0).toFixed(2)} Bs`, icon: 'bi-clock-history', color: 'warning' },
   ] : [];
 
   return (
@@ -66,25 +66,6 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
-
-      {summary && (
-        <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-          <div className="kpi-card">
-            <div className="kpi-icon success"><i className="bi bi-cash" /></div>
-            <div className="kpi-info">
-              <div className="kpi-label">Total Recaudado</div>
-              <div className="kpi-value" style={{ color: 'var(--success)' }}>{summary.total_collected_bs.toFixed(2)} <span style={{ fontSize: '0.7em', fontWeight: 500 }}>Bs</span></div>
-            </div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-icon danger"><i className="bi bi-exclamation-diamond" /></div>
-            <div className="kpi-info">
-              <div className="kpi-label">Total por Cobrar</div>
-              <div className="kpi-value" style={{ color: 'var(--danger)' }}>{summary.total_due_bs.toFixed(2)} <span style={{ fontSize: '0.7em', fontWeight: 500 }}>Bs</span></div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="glass-card" style={{ marginTop: '8px' }}>
         <div className="glass-card-header">

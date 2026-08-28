@@ -16,8 +16,9 @@ export default function Collections() {
   useEffect(() => {
     client.get('/admin/periods').then(({ data }) => {
       if (data.ok) {
-        setPeriods(data.items);
-        const calculated = data.items.find(p => p.status === 'CALCULATED');
+        const items = data.items || [];
+        setPeriods(items);
+        const calculated = items.find(p => p.status === 'CALCULATED');
         if (calculated) setSelectedPeriod(String(calculated.id));
       }
     });
@@ -29,7 +30,7 @@ export default function Collections() {
     client.get(`/admin/periods/${selectedPeriod}/allocations`, {
       params: { status: statusFilter || undefined, search: search || undefined }
     }).then(({ data }) => {
-      if (data.ok) setAllocations(data.items);
+      if (data.ok) setAllocations(data.items || []);
     }).finally(() => setLoading(false));
   }, [selectedPeriod, statusFilter]);
 
@@ -55,11 +56,11 @@ export default function Collections() {
         reference: payForm.reference,
       });
       if (data.ok) {
-        toast.success(`Pago registrado — Dpto ${data.allocation.apartment?.number}`);
+        toast.success(`Pago registrado — Dpto ${data.allocation?.apartment?.number || ''}`);
         setPayModal(null);
-        // Refresh
+        // Refresh allocations
         const res = await client.get(`/admin/periods/${selectedPeriod}/allocations`);
-        if (res.data.ok) setAllocations(res.data.items);
+        if (res.data.ok) setAllocations(res.data.items || []);
       } else {
         toast.error(data.message);
       }

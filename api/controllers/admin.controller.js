@@ -1,5 +1,63 @@
 const prisma = require('../lib/prisma');
 
+// ─── Helpers: mapeadores a snake_case para el frontend ────────────────────────
+const mapApartment = (apt) => ({
+  id: apt.id,
+  block: apt.block,
+  number: apt.number,
+  owner_name: apt.ownerName,
+  phone: apt.phone,
+  coefficient: apt.coefficient,
+  is_active: apt.isActive,
+  created_at: apt.createdAt,
+  meter: apt.meters && apt.meters.length > 0 ? {
+    id: apt.meters[0].id,
+    code: apt.meters[0].code,
+    is_inverted: apt.meters[0].isInverted,
+    is_active: apt.meters[0].isActive,
+  } : null
+});
+
+const mapPeriod = (p) => ({
+  id: p.id,
+  code: p.code,
+  status: p.status,
+  total_common_amount_bs: p.totalCommonAmountBs,
+  general_total_consumption_m3: p.generalTotalConsumptionM3,
+  total_individual_consumption_m3: p.totalIndividualConsumptionM3,
+  common_difference_m3: p.commonDifferenceM3,
+  distributed_total_bs: p.distributedTotalBs,
+  created_at: p.createdAt,
+  closed_at: p.closedAt,
+});
+
+const mapAllocation = (a) => {
+  const pending = Math.round((a.amountDueBs - a.amountPaidBs) * 100) / 100;
+  return {
+    id: a.id,
+    period_id: a.periodId,
+    apartment_id: a.apartmentId,
+    consumption_m3: a.consumptionM3,
+    percentage_share: a.percentageShare,
+    amount_due_bs: a.amountDueBs,
+    amount_paid_bs: a.amountPaidBs,
+    pending_amount_bs: pending > 0 ? pending : 0,
+    status: a.status,
+    created_at: a.createdAt,
+    updated_at: a.updatedAt,
+    apartment: a.apartment ? mapApartment({ ...a.apartment, meters: [] }) : null,
+    period: a.period ? mapPeriod(a.period) : null,
+    payments: (a.payments || []).map(p => ({
+      id: p.id,
+      amount_bs: p.amountBs,
+      payment_method: p.paymentMethod,
+      reference: p.reference,
+      created_at: p.createdAt,
+    })),
+  };
+};
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 exports.getDashboard = async (req, res) => {
   try {
     const totalApartments = await prisma.apartment.count();
@@ -9,7 +67,6 @@ exports.getDashboard = async (req, res) => {
       take: 5
     });
 
-    // Calcular totales cobrados y pendientes de TODOS los periodos
     const allAllocations = await prisma.allocation.findMany({
       select: { amountDueBs: true, amountPaidBs: true, status: true }
     });
@@ -30,7 +87,7 @@ exports.getDashboard = async (req, res) => {
         total_collected: totalCollected,
         pending_collection: totalPending
       },
-      recent_periods: recentPeriods
+      recent_periods: recentPeriods.map(mapPeriod)
     });
   } catch (error) {
     console.error('Error en getDashboard:', error);
@@ -38,18 +95,23 @@ exports.getDashboard = async (req, res) => {
   }
 };
 
+// ─── Bloques ──────────────────────────────────────────────────────────────────
 exports.getBlocks = async (req, res) => {
   try {
     const blocks = await prisma.apartment.findMany({
       select: { block: true },
-      distinct: ['block']
+      distinct: ['block'],
+      orderBy: { block: 'asc' }
     });
-    res.json({ ok: true, blocks: blocks.map(b => b.block) });
+    // Frontend espera { ok, items: [...] }
+    res.json({ ok: true, items: blocks.map(b => b.block) });
   } catch (error) {
+    console.error('Error en getBlocks:', error);
     res.status(500).json({ ok: false, message: 'Error interno' });
   }
 };
 
+// ─── Listar Departamentos ─────────────────────────────────────────────────────
 exports.getApartments = async (req, res) => {
   try {
     const { block, search } = req.query;
@@ -57,27 +119,33 @@ exports.getApartments = async (req, res) => {
     if (block) where.block = block;
     if (search) {
       where.OR = [
-        { ownerName: { contains: search } },
-        { number: { contains: search } }
+        { ownerName: { contains: search, mode: 'insensitive' } },
+        { number: { contains: search, mode: 'insensitive' } },
+        { block: { contains: search, mode: 'insensitive' } }
       ];
     }
     const apartments = await prisma.apartment.findMany({
       where,
-      include: { meters: true }
+      include: { meters: { where: { isActive: true } } },
+      orderBy: [{ block: 'asc' }, { number: 'asc' }]
     });
-    const mapped = apartments.map(apt => ({
-      ...apt,
-      meter: apt.meters.length > 0 ? apt.meters[0] : null
-    }));
-    res.json({ ok: true, apartments: mapped });
+    // Frontend espera { ok, items: [...] }
+    res.json({ ok: true, items: apartments.map(mapApartment) });
   } catch (error) {
+    console.error('Error en getApartments:', error);
     res.status(500).json({ ok: false, message: 'Error interno' });
   }
 };
 
+// ─── Crear Departamento ───────────────────────────────────────────────────────
 exports.createApartment = async (req, res) => {
   try {
-    const { block, number, owner_name, phone, coefficient, meter_code, meter_is_inverted } = req.body;
+    const { block, number, owner_name, phone, coefficient, meter_code, meter_is_inverted, is_inverted } = req.body;
+
+    if (!block || !number || !owner_name || !meter_code) {
+      return res.status(400).json({ ok: false, message: 'Bloque, número, propietario y código de medidor son obligatorios.' });
+    }
+
     const existing = await prisma.apartment.findUnique({
       where: { uq_apartment_block_number: { block: block.toUpperCase(), number: String(number) } }
     });
@@ -88,36 +156,46 @@ exports.createApartment = async (req, res) => {
         block: block.toUpperCase(),
         number: String(number),
         ownerName: owner_name,
-        phone,
+        phone: phone || null,
         coefficient: parseFloat(coefficient) || 1.0,
         meters: {
           create: {
             code: meter_code,
-            isInverted: meter_is_inverted || false
+            isInverted: meter_is_inverted || is_inverted || false
           }
         }
       },
       include: { meters: true }
     });
 
-    res.status(201).json({ ok: true, message: 'Departamento creado', apartment: apt });
+    res.status(201).json({ ok: true, message: 'Departamento creado', apartment: mapApartment(apt) });
   } catch (error) {
-    res.status(500).json({ ok: false, message: 'Error interno' });
+    console.error('Error en createApartment:', error);
+    res.status(500).json({ ok: false, message: 'Error interno al crear departamento' });
   }
 };
 
+// ─── Listar Periodos ──────────────────────────────────────────────────────────
 exports.getPeriods = async (req, res) => {
   try {
     const periods = await prisma.billingPeriod.findMany({ orderBy: { id: 'desc' } });
-    res.json({ ok: true, periods });
+    // Frontend espera { ok, items: [...] }
+    res.json({ ok: true, items: periods.map(mapPeriod) });
   } catch (error) {
+    console.error('Error en getPeriods:', error);
     res.status(500).json({ ok: false, message: 'Error interno' });
   }
 };
 
+// ─── Crear Periodo ────────────────────────────────────────────────────────────
 exports.createPeriod = async (req, res) => {
   try {
     const { code, common_amount, general_readings } = req.body;
+
+    if (!code || !common_amount) {
+      return res.status(400).json({ ok: false, message: 'El código y el monto común son obligatorios.' });
+    }
+
     const existing = await prisma.billingPeriod.findUnique({ where: { code } });
     if (existing) return res.status(400).json({ ok: false, message: 'El periodo ya existe' });
 
@@ -133,16 +211,17 @@ exports.createPeriod = async (req, res) => {
       }
     });
 
-    res.status(201).json({ ok: true, message: 'Periodo creado', period });
+    res.status(201).json({ ok: true, message: 'Periodo creado', period: mapPeriod(period) });
   } catch (error) {
+    console.error('Error en createPeriod:', error);
     res.status(500).json({ ok: false, message: 'Error interno' });
   }
 };
 
 // ─── Guardar Lecturas ─────────────────────────────────────────────────────────
 exports.saveReadings = async (req, res) => {
-  const { id } = req.params; // period id
-  const { readings } = req.body; // [{ apartment_id, previous_reading, current_reading }]
+  const { id } = req.params;
+  const { readings } = req.body;
 
   if (!readings || !Array.isArray(readings) || readings.length === 0) {
     return res.status(400).json({ ok: false, message: 'Debes enviar al menos una lectura.' });
@@ -161,48 +240,28 @@ exports.saveReadings = async (req, res) => {
       const previousReading = parseFloat(item.previous_reading ?? 0);
       const currentReading = parseFloat(item.current_reading ?? 0);
 
-      // Buscar medidor activo del departamento
-      const meter = await prisma.meter.findFirst({
-        where: { apartmentId, isActive: true }
-      });
+      const meter = await prisma.meter.findFirst({ where: { apartmentId, isActive: true } });
 
       if (!meter) {
         errors.push({ apartment_id: apartmentId, error: 'No existe medidor activo para este departamento.' });
         continue;
       }
 
-      // Calcular consumo según si el medidor está invertido (igual al Python original)
       let consumptionM3 = meter.isInverted
         ? previousReading - currentReading
         : currentReading - previousReading;
-
       consumptionM3 = Math.round(consumptionM3 * 100) / 100;
 
       if (consumptionM3 < 0) {
-        errors.push({ apartment_id: apartmentId, error: 'El consumo no puede ser negativo. Revisa las lecturas del medidor.' });
+        errors.push({ apartment_id: apartmentId, error: 'El consumo no puede ser negativo. Revisa las lecturas.' });
         continue;
       }
 
-      // Crear o actualizar la lectura (upsert)
       const reading = await prisma.reading.upsert({
         where: { uq_period_meter: { periodId: parseInt(id), meterId: meter.id } },
-        create: {
-          periodId: parseInt(id),
-          apartmentId,
-          meterId: meter.id,
-          previousReading,
-          currentReading,
-          consumptionM3,
-          sourceJson: JSON.stringify({ source: 'manual' })
-        },
-        update: {
-          previousReading,
-          currentReading,
-          consumptionM3,
-          sourceJson: JSON.stringify({ source: 'manual', updated_at: new Date().toISOString() })
-        }
+        create: { periodId: parseInt(id), apartmentId, meterId: meter.id, previousReading, currentReading, consumptionM3, sourceJson: JSON.stringify({ source: 'manual' }) },
+        update: { previousReading, currentReading, consumptionM3, sourceJson: JSON.stringify({ source: 'manual', updated_at: new Date().toISOString() }) }
       });
-
       saved.push(reading);
     }
 
@@ -232,24 +291,15 @@ exports.settlePeriod = async (req, res) => {
     if (period.status === 'CLOSED') return res.status(400).json({ ok: false, message: 'El periodo ya está cerrado.' });
 
     const readings = period.readings;
-    if (readings.length === 0) {
-      return res.status(400).json({ ok: false, message: 'No hay lecturas registradas para este periodo.' });
-    }
-    if (period.totalCommonAmountBs <= 0) {
-      return res.status(400).json({ ok: false, message: 'Debes registrar el monto total común (factura) del periodo.' });
-    }
+    if (readings.length === 0) return res.status(400).json({ ok: false, message: 'No hay lecturas registradas para este periodo.' });
+    if (period.totalCommonAmountBs <= 0) return res.status(400).json({ ok: false, message: 'Debes registrar el monto total común (factura) del periodo.' });
 
-    // Consumo total individual de todos los departamentos
     const totalConsumption = Math.round(readings.reduce((sum, r) => sum + r.consumptionM3, 0) * 100) / 100;
-    if (totalConsumption <= 0) {
-      return res.status(400).json({ ok: false, message: 'El consumo total debe ser mayor que cero para distribuir el pago.' });
-    }
+    if (totalConsumption <= 0) return res.status(400).json({ ok: false, message: 'El consumo total debe ser mayor que cero.' });
 
-    // Consumo general del medidor maestro (si existe)
     const generalTotal = parseFloat(period.generalTotalConsumptionM3 ?? 0);
     const commonDifference = generalTotal > 0 ? Math.round((generalTotal - totalConsumption) * 100) / 100 : 0;
 
-    // Eliminar asignaciones anteriores del periodo (re-liquidar)
     await prisma.allocation.deleteMany({ where: { periodId: parseInt(id) } });
 
     let distributedTotal = 0;
@@ -265,7 +315,7 @@ exports.settlePeriod = async (req, res) => {
           periodId: parseInt(id),
           apartmentId: reading.apartmentId,
           consumptionM3: reading.consumptionM3,
-          percentageShare: Math.round(percentage * 10000) / 100, // como porcentaje con 2 decimales
+          percentageShare: Math.round(percentage * 10000) / 100,
           amountDueBs: amountDue,
           amountPaidBs: 0,
           status: 'PENDIENTE',
@@ -273,7 +323,6 @@ exports.settlePeriod = async (req, res) => {
             period_code: period.code,
             consumption_m3: reading.consumptionM3,
             total_consumption_m3: totalConsumption,
-            share_ratio: Math.round(percentage * 100000000) / 100000000,
             share_percent: Math.round(percentage * 10000) / 100,
             common_total_amount_bs: Math.round(period.totalCommonAmountBs * 100) / 100,
             general_total_consumption_m3: generalTotal,
@@ -284,51 +333,35 @@ exports.settlePeriod = async (req, res) => {
       allocations.push(allocation);
     }
 
-    // ── Ajuste de redondeo (como en el Python original) ───────────────────────
-    // Si la suma no cuadra exactamente con el total de la factura, ajustar el último
+    // Ajuste de redondeo en el último departamento
     const roundingAdj = Math.round((period.totalCommonAmountBs - distributedTotal) * 100) / 100;
     if (roundingAdj !== 0 && allocations.length > 0) {
       const last = allocations[allocations.length - 1];
       const newAmount = Math.round((last.amountDueBs + roundingAdj) * 100) / 100;
-      const prevBreakdown = JSON.parse(last.breakdownJson || '{}');
+      const prevBd = JSON.parse(last.breakdownJson || '{}');
       await prisma.allocation.update({
         where: { id: last.id },
-        data: {
-          amountDueBs: newAmount,
-          breakdownJson: JSON.stringify({ ...prevBreakdown, rounding_adjustment_bs: roundingAdj })
-        }
+        data: { amountDueBs: newAmount, breakdownJson: JSON.stringify({ ...prevBd, rounding_adjustment_bs: roundingAdj }) }
       });
       distributedTotal = Math.round((distributedTotal + roundingAdj) * 100) / 100;
     }
 
-    // Actualizar estadísticas del periodo
     const updatedPeriod = await prisma.billingPeriod.update({
       where: { id: parseInt(id) },
-      data: {
-        totalIndividualConsumptionM3: totalConsumption,
-        commonDifferenceM3: commonDifference,
-        distributedTotalBs: distributedTotal,
-        status: 'CALCULATED'
-      }
+      data: { totalIndividualConsumptionM3: totalConsumption, commonDifferenceM3: commonDifference, distributedTotalBs: distributedTotal, status: 'CALCULATED' }
     });
 
-    // Recargar asignaciones con datos del departamento para la respuesta
     const finalAllocations = await prisma.allocation.findMany({
       where: { periodId: parseInt(id) },
-      include: { apartment: true }
+      include: { apartment: { include: { meters: { where: { isActive: true } } } }, payments: true }
     });
 
     res.json({
       ok: true,
       message: 'Periodo liquidado correctamente.',
-      period: updatedPeriod,
-      summary: {
-        total_consumption_m3: totalConsumption,
-        general_total_consumption_m3: generalTotal,
-        common_difference_m3: commonDifference,
-        distributed_total_bs: distributedTotal
-      },
-      allocations: finalAllocations
+      period: mapPeriod(updatedPeriod),
+      summary: { total_consumption_m3: totalConsumption, general_total_consumption_m3: generalTotal, common_difference_m3: commonDifference, distributed_total_bs: distributedTotal },
+      allocations: finalAllocations.map(mapAllocation)
     });
   } catch (error) {
     console.error('Error en settlePeriod:', error);
@@ -336,15 +369,17 @@ exports.settlePeriod = async (req, res) => {
   }
 };
 
-// ─── Obtener Asignaciones ─────────────────────────────────────────────────────
+// ─── Obtener Asignaciones (Cobros) ────────────────────────────────────────────
 exports.getAllocations = async (req, res) => {
   try {
     const { id } = req.params;
     const allocations = await prisma.allocation.findMany({
       where: { periodId: parseInt(id) },
-      include: { apartment: true, payments: true }
+      include: { apartment: { include: { meters: { where: { isActive: true } } } }, payments: true },
+      orderBy: [{ apartment: { block: 'asc' } }, { apartment: { number: 'asc' } }]
     });
-    res.json({ ok: true, allocations });
+    // Frontend espera { ok, items: [...] }
+    res.json({ ok: true, items: allocations.map(mapAllocation) });
   } catch (error) {
     console.error('Error en getAllocations:', error);
     res.status(500).json({ ok: false, message: 'Error interno' });
@@ -353,7 +388,7 @@ exports.getAllocations = async (req, res) => {
 
 // ─── Registrar Pago (Cobro Rápido) ────────────────────────────────────────────
 exports.registerPayment = async (req, res) => {
-  const { id } = req.params; // allocation id
+  const { id } = req.params;
   const { amount_bs, payment_method, reference, notes } = req.body;
 
   if (!amount_bs || parseFloat(amount_bs) <= 0) {
@@ -361,52 +396,37 @@ exports.registerPayment = async (req, res) => {
   }
 
   try {
-    const allocation = await prisma.allocation.findUnique({
-      where: { id: parseInt(id) }
-    });
-
+    const allocation = await prisma.allocation.findUnique({ where: { id: parseInt(id) } });
     if (!allocation) return res.status(404).json({ ok: false, message: 'Recibo no encontrado.' });
-    if (allocation.status === 'PAGADO') {
-      return res.status(400).json({ ok: false, message: 'Este recibo ya está pagado.' });
-    }
+    if (allocation.status === 'PAGADO') return res.status(400).json({ ok: false, message: 'Este recibo ya está pagado.' });
 
     const amountPaid = parseFloat(amount_bs);
 
-    // Registrar el pago en la tabla payments
-    const payment = await prisma.payment.create({
+    await prisma.payment.create({
       data: {
         allocationId: parseInt(id),
         amountBs: amountPaid,
         paymentMethod: payment_method || 'EFECTIVO',
         reference: reference || null,
         notesJson: notes ? JSON.stringify({ notes }) : null,
-        registeredByUserId: req.user?.id || null
+        registeredByUserId: req.user?.sub || null
       }
     });
 
-    // Sumar todos los pagos del recibo para actualizar amountPaidBs
-    const allPayments = await prisma.payment.findMany({
-      where: { allocationId: parseInt(id) }
-    });
+    const allPayments = await prisma.payment.findMany({ where: { allocationId: parseInt(id) } });
     const totalPaid = Math.round(allPayments.reduce((sum, p) => sum + p.amountBs, 0) * 100) / 100;
-
-    // Determinar nuevo estado: PAGADO si cubre la deuda, sino PARCIAL
     const newStatus = totalPaid >= allocation.amountDueBs ? 'PAGADO' : 'PARCIAL';
 
     const updatedAllocation = await prisma.allocation.update({
       where: { id: parseInt(id) },
-      data: {
-        amountPaidBs: totalPaid,
-        status: newStatus
-      },
-      include: { apartment: true, payments: true }
+      data: { amountPaidBs: totalPaid, status: newStatus },
+      include: { apartment: { include: { meters: { where: { isActive: true } } } }, payments: true }
     });
 
     res.json({
       ok: true,
       message: `Pago de ${amountPaid} Bs registrado. Estado: ${newStatus}.`,
-      payment,
-      allocation: updatedAllocation
+      allocation: mapAllocation(updatedAllocation)
     });
   } catch (error) {
     console.error('Error en registerPayment:', error);

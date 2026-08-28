@@ -30,7 +30,7 @@ export default function Periods() {
     try {
       const { data } = await client.post('/admin/periods', {
         code: form.code,
-        total_common_amount_bs: parseFloat(form.total_common_amount_bs) || 0,
+        common_amount: parseFloat(form.total_common_amount_bs) || 0,
         general_total_consumption_m3: parseFloat(form.general_total_consumption_m3) || 0,
       });
       if (data.ok) {
@@ -88,7 +88,7 @@ export default function Periods() {
     try {
       const { data } = await client.post(`/admin/periods/${showReadings.id}/readings`, { readings });
       if (data.ok) {
-        toast.success(`${data.items.length} lecturas guardadas`);
+        toast.success(`${(data.saved || []).length} lecturas guardadas`);
         setShowReadings(null);
       } else {
         toast.error(data.message);
