@@ -2,44 +2,52 @@ import { useState, useEffect } from 'react';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import client from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function OwnerDashboard() {
-  const [data, setData] = useState(null);
+  const [ownerData, setOwnerData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { theme } = useTheme();
+  const { user } = useAuth();
 
   useEffect(() => {
-    client.get('/owner/dashboard').then(({ data: res }) => {
-      if (res.ok) setData(res);
-    }).finally(() => setLoading(false));
+    client.get('/owner/dashboard')
+      .then(({ data: res }) => {
+        if (res.ok) setOwnerData(res);
+        else setError(res.message);
+      })
+      .catch(err => {
+        setError(err.response?.data?.message || 'Error al cargar los datos');
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
     return <div className="loading-overlay"><div className="spinner" /> Cargando tu información...</div>;
   }
 
-  if (!data) {
+  if (error || !ownerData) {
     return (
       <div className="empty-state">
         <i className="bi bi-exclamation-triangle" />
-        <p>No tienes un departamento asignado. Contacta al administrador.</p>
+        <p>{error || 'No tienes un departamento asignado. Contacta al administrador.'}</p>
       </div>
     );
   }
 
-  const { owner, apartment, allocations } = data;
-  const latest = allocations[0];
-  const totalDebt = allocations.reduce((s, a) => s + a.pending_amount_bs, 0);
+  const { apartment, allocations = [], stats = {} } = ownerData;
+  const latest = allocations[0] || null;
 
   const chartData = {
-    labels: allocations.slice(0, 12).reverse().map(a => a.period.code),
+    labels: [...allocations].slice(0, 12).reverse().map(a => a.period?.code || ''),
     datasets: [
       {
         label: 'Consumo (m³)',
-        data: allocations.slice(0, 12).reverse().map(a => a.consumption_m3),
+        data: [...allocations].slice(0, 12).reverse().map(a => a.consumption_m3 || 0),
         backgroundColor: theme === 'dark' ? 'rgba(14, 165, 233, 0.6)' : 'rgba(14, 165, 233, 0.8)',
         borderRadius: 6,
         borderSkipped: false,
@@ -76,12 +84,20 @@ export default function OwnerDashboard() {
 
   return (
     <>
+      {/* Hero Banner */}
       <div className="owner-hero">
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <p className="owner-hero-sub">Bienvenido, {owner.full_name}</p>
+          <p className="owner-hero-sub">Bienvenido, {apartment?.owner_name || user?.full_name}</p>
           <h1 className="owner-hero-title">
             {apartment ? `Bloque ${apartment.block} — Dpto ${apartment.number}` : 'Mi Departamento'}
           </h1>
+          {apartment?.meter && (
+            <p style={{ marginTop: '4px', opacity: 0.75, fontSize: '0.85rem' }}>
+              <i className="bi bi-speedometer2" style={{ marginRight: '6px' }} />
+              Medidor: <strong>{apartment.meter.code}</strong>
+              {apartment.meter.is_inverted && ' · Invertido'}
+            </p>
+          )}
 
           <div className="owner-stats">
             <div className="owner-stat">
@@ -93,8 +109,8 @@ export default function OwnerDashboard() {
               <div className="owner-stat-label">Monto del Mes (Bs)</div>
             </div>
             <div className="owner-stat">
-              <div className="owner-stat-value" style={{ color: totalDebt > 0 ? '#fbbf24' : '#6ee7b7' }}>
-                {totalDebt.toFixed(2)}
+              <div className="owner-stat-value" style={{ color: (stats.total_debt_bs || 0) > 0 ? '#fbbf24' : '#6ee7b7' }}>
+                {(stats.total_debt_bs || 0).toFixed(2)}
               </div>
               <div className="owner-stat-label">Deuda Total (Bs)</div>
             </div>
@@ -106,12 +122,13 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
+      {/* Estado del recibo más reciente */}
       {latest && (
         <div className="glass-card mb-6">
           <div className="glass-card-header">
             <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
               <i className="bi bi-receipt" style={{ marginRight: '8px', color: 'var(--accent-primary)' }} />
-              Estado del Periodo Actual — {latest.period.code}
+              Estado del Periodo — {latest.period?.code}
             </h3>
             <span className={`status-badge ${latest.status === 'PAGADO' ? 'paid' : latest.status === 'PARCIAL' ? 'partial' : 'pending'}`}>
               <i className={`bi bi-${latest.status === 'PAGADO' ? 'check-circle-fill' : 'clock-history'}`} />
@@ -126,7 +143,7 @@ export default function OwnerDashboard() {
               </div>
               <div>
                 <p className="text-xs text-muted mb-2">Participación</p>
-                <p className="font-bold" style={{ fontSize: '1.2rem' }}>{latest.percentage_share.toFixed(2)}<span className="text-sm text-muted">%</span></p>
+                <p className="font-bold" style={{ fontSize: '1.2rem' }}>{(latest.percentage_share || 0).toFixed(2)}<span className="text-sm text-muted">%</span></p>
               </div>
               <div>
                 <p className="text-xs text-muted mb-2">Total a Pagar</p>
@@ -136,11 +153,18 @@ export default function OwnerDashboard() {
                 <p className="text-xs text-muted mb-2">Pagado</p>
                 <p className="font-bold" style={{ fontSize: '1.2rem', color: 'var(--success)' }}>{latest.amount_paid_bs.toFixed(2)} <span className="text-sm">Bs</span></p>
               </div>
+              <div>
+                <p className="text-xs text-muted mb-2">Pendiente</p>
+                <p className="font-bold" style={{ fontSize: '1.2rem', color: (latest.pending_amount_bs || 0) > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                  {(latest.pending_amount_bs || 0).toFixed(2)} <span className="text-sm">Bs</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* Gráfico de consumo histórico */}
       {allocations.length > 1 && (
         <div className="glass-card mb-6">
           <div className="glass-card-header">
@@ -157,6 +181,7 @@ export default function OwnerDashboard() {
         </div>
       )}
 
+      {/* Tabla historial */}
       <div className="glass-card">
         <div className="glass-card-header">
           <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
@@ -172,18 +197,22 @@ export default function OwnerDashboard() {
                 <th className="text-right">Consumo (m³)</th>
                 <th className="text-right">Monto (Bs)</th>
                 <th className="text-right">Pagado (Bs)</th>
+                <th className="text-right">Pendiente (Bs)</th>
                 <th className="text-center">Estado</th>
               </tr>
             </thead>
             <tbody>
               {allocations.length === 0 ? (
-                <tr><td colSpan={5}><div className="empty-state"><i className="bi bi-droplet" /><p>Aún no hay lecturas registradas para tu departamento</p></div></td></tr>
+                <tr><td colSpan={6}><div className="empty-state"><i className="bi bi-droplet" /><p>Aún no hay lecturas registradas para tu departamento</p></div></td></tr>
               ) : allocations.map(a => (
                 <tr key={a.id}>
-                  <td><strong>{a.period.code}</strong></td>
+                  <td><strong>{a.period?.code}</strong></td>
                   <td className="numeric">{a.consumption_m3.toFixed(2)}</td>
                   <td className="numeric font-semibold">{a.amount_due_bs.toFixed(2)}</td>
                   <td className="numeric" style={{ color: 'var(--success)' }}>{a.amount_paid_bs.toFixed(2)}</td>
+                  <td className="numeric" style={{ color: (a.pending_amount_bs || 0) > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                    {(a.pending_amount_bs || 0).toFixed(2)}
+                  </td>
                   <td className="center">
                     <span className={`status-badge ${a.status === 'PAGADO' ? 'paid' : a.status === 'PARCIAL' ? 'partial' : 'pending'}`}>
                       {a.status === 'PAGADO' ? 'Pagado' : a.status === 'PARCIAL' ? 'Parcial' : 'Pendiente'}
