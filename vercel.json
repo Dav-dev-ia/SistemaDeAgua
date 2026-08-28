@@ -13,7 +13,8 @@
   "env": {
     "DATABASE_URL": "postgresql://neondb_owner:npg_5XyNGQgB6cFJ@ep-weathered-paper-ayzkcai1-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require",
     "DIRECT_URL": "postgresql://neondb_owner:npg_5XyNGQgB6cFJ@ep-weathered-paper-ayzkcai1.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require",
-    "JWT_SECRET_KEY": "dev-jwt-secret-change-in-production"
+    "JWT_SECRET_KEY": "aguapago-jwt-s3cr3t-2026-production-key",
+    "BOOTSTRAP_KEY": "bootstrap-aguapago-2026"
   },
   "headers": [
     {

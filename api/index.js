@@ -8,22 +8,43 @@ const ownerRoutes = require('./routes/owner');
 
 const app = express();
 
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+// ─── Seguridad CORS: solo permite el frontend de producción y localhost ────────
+const allowedOrigins = [
+  'https://proyectoagua2.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
 
-// Rutas
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permite peticiones sin origin (Postman, curl, apps móviles)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('Origen no permitido por CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+app.use(express.json({ limit: '1mb' }));
+
+// ─── Rutas ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/owner', ownerRoutes);
 
+// ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, message: 'API AguaPago operativa (Node.js)' });
+  res.json({ ok: true, message: 'API AguaPago operativa (Node.js)', timestamp: new Date().toISOString() });
 });
 
-app.use((req, res, next) => {
+// ─── 404 ──────────────────────────────────────────────────────────────────────
+app.use((req, res) => {
   res.status(404).json({ ok: false, message: 'Recurso no encontrado' });
 });
 
+// ─── Error global ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ ok: false, message: 'Error interno del servidor' });
