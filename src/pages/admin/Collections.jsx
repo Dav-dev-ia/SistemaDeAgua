@@ -178,7 +178,7 @@ export default function Collections() {
       <div className="glass-card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div className="table-responsive">
           <table className="data-table">
-            <thead style={{ whiteSpace: 'nowrap' }}>
+            <thead>
               <tr>
                 <th>Bloque</th>
                 <th>Dpto</th>
@@ -198,22 +198,22 @@ export default function Collections() {
                 <tr><td colSpan={9}><div className="empty-state"><i className="bi bi-inbox" /><p>{!selectedPeriod ? 'Selecciona un periodo para ver los cobros' : 'No se encontraron resultados'}</p></div></td></tr>
               ) : filtered.map(a => (
                 <tr key={a.id}>
-                  <td style={{ whiteSpace: 'nowrap' }}><span className="status-badge open">Blq {a.apartment?.block}</span></td>
+                  <td><span className="status-badge open">Blq {a.apartment?.block}</span></td>
                   <td><strong>{a.apartment?.number}</strong></td>
-                  <td style={{ minWidth: '150px' }}>{a.apartment?.owner_name}</td>
+                  <td>{a.apartment?.owner_name}</td>
                   <td className="numeric">{a.consumption_m3.toFixed(2)}</td>
                   <td className="numeric font-semibold">{a.amount_due_bs.toFixed(2)}</td>
                   <td className="numeric" style={{ color: 'var(--success)' }}>{a.amount_paid_bs.toFixed(2)}</td>
                   <td className="numeric font-bold" style={{ color: a.pending_amount_bs > 0 ? 'var(--danger)' : 'var(--success)' }}>
                     {a.pending_amount_bs.toFixed(2)}
                   </td>
-                  <td className="center" style={{ whiteSpace: 'nowrap' }}>
+                  <td className="center">
                     <span className={`status-badge ${a.status === 'PAGADO' ? 'paid' : a.status === 'PARCIAL' ? 'partial' : 'pending'}`}>
                       <i className={`bi bi-${a.status === 'PAGADO' ? 'check-circle-fill' : a.status === 'PARCIAL' ? 'pie-chart-fill' : 'clock-history'}`} />
                       {a.status === 'PAGADO' ? 'Pagado' : a.status === 'PARCIAL' ? 'Parcial' : 'Pendiente'}
                     </span>
                   </td>
-                  <td className="center" style={{ whiteSpace: 'nowrap' }}>
+                  <td className="center">
                     {a.status !== 'PAGADO' ? (
                       <button className="btn btn-success btn-sm" onClick={() => openPay(a)}>
                         <i className="bi bi-cash-stack" /> Cobrar
