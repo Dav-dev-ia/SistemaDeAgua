@@ -119,7 +119,7 @@ exports.getBlocks = async (req, res) => {
 // ─── Listar Departamentos ─────────────────────────────────────────────────────
 exports.getApartments = async (req, res) => {
   try {
-    const { block, search } = req.query;
+    const { block, search, page, limit } = req.query;
     const where = {};
     if (block) where.block = block;
     if (search) {
@@ -129,15 +129,33 @@ exports.getApartments = async (req, res) => {
         { block: { contains: search, mode: 'insensitive' } }
       ];
     }
-    const apartments = await prisma.apartment.findMany({
+
+    const queryOptions = {
       where,
       include: { 
         meters: { where: { isActive: true } },
         users: { where: { role: 'OWNER' } }
       },
       orderBy: [{ block: 'asc' }, { number: 'asc' }]
-    });
-    // Frontend espera { ok, items: [...] }
+    };
+
+    if (page && limit) {
+      const take = parseInt(limit, 10);
+      const skip = (parseInt(page, 10) - 1) * take;
+      queryOptions.take = take;
+      queryOptions.skip = skip;
+      
+      const totalCount = await prisma.apartment.count({ where });
+      const apartments = await prisma.apartment.findMany(queryOptions);
+      
+      return res.json({ 
+        ok: true, 
+        items: apartments.map(mapApartment),
+        pagination: { total: totalCount, page: parseInt(page, 10), limit: take }
+      });
+    }
+
+    const apartments = await prisma.apartment.findMany(queryOptions);
     res.json({ ok: true, items: apartments.map(mapApartment) });
   } catch (error) {
     console.error('Error en getApartments:', error);

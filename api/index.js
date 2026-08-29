@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -28,9 +30,25 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '1mb' }));
+app.use(helmet()); // Seguridad HTTP headers
+
+// Limitador global (puede ser ajustado por ruta si es necesario)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // Limita a 100 peticiones por ventana por IP
+  message: { ok: false, message: 'Demasiadas peticiones. Intenta nuevamente más tarde.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 15, // Solo 15 intentos de login/registro
+  message: { ok: false, message: 'Demasiados intentos de autenticación. Espera 15 minutos.' }
+});
+
+app.use(limiter);
 
 // ─── Rutas ────────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/owner', ownerRoutes);
 
