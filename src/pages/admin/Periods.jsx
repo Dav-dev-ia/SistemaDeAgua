@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import client from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 
@@ -122,6 +123,38 @@ export default function Periods() {
     return a.block.toLowerCase().includes(q) || a.number.toLowerCase().includes(q) || a.owner_name.toLowerCase().includes(q);
   });
 
+  const handleDownloadGeneral = () => {
+    if (!periods || periods.length === 0) return toast.warning('No hay periodos para exportar');
+    
+    const data = periods.map(p => ({
+      'Periodo': p.code,
+      'Estado': p.status === 'OPEN' ? 'Abierto' : 'Calculado',
+      'Monto Total (Bs)': p.total_common_amount_bs,
+      'Consumo General (m³)': p.general_total_consumption_m3,
+      'Consumo Individual (m³)': p.total_individual_consumption_m3,
+      'Diferencia (m³)': p.common_difference_m3,
+      'Monto Distribuido (Bs)': p.distributed_total_bs || 0
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    
+    const wscols = [
+      {wch: 15}, // Periodo
+      {wch: 15}, // Estado
+      {wch: 20}, // Monto Total
+      {wch: 22}, // Consumo General
+      {wch: 22}, // Consumo Ind
+      {wch: 18}, // Dif
+      {wch: 22}  // Monto Distribuido
+    ];
+    worksheet['!cols'] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Resumen Histórico');
+    
+    XLSX.writeFile(workbook, `Reporte_General_Agua.xlsx`);
+  };
+
   if (loading) {
     return <div className="loading-overlay"><div className="spinner" /> Cargando periodos...</div>;
   }
@@ -133,9 +166,14 @@ export default function Periods() {
           <h1 className="page-title">Periodos de Facturación</h1>
           <p className="page-subtitle">Gestión de periodos mensuales y lecturas</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <i className="bi bi-plus-lg" /> Nuevo Periodo
-        </button>
+        <div className="flex gap-2 items-center">
+          <button className="btn btn-outline" onClick={handleDownloadGeneral}>
+            <i className="bi bi-file-earmark-spreadsheet" style={{ color: 'var(--success)' }} /> Descargar Excel
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            <i className="bi bi-plus-lg" /> Nuevo Periodo
+          </button>
+        </div>
       </div>
 
       <div className="glass-card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import client from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 
@@ -81,28 +82,43 @@ export default function Collections() {
   const handleDownloadExcel = () => {
     if (!allocations || allocations.length === 0) return toast.warning('No hay datos para exportar');
     
-    // Crear cabecera CSV (con BOM para asegurar caracteres especiales en Excel)
-    let csv = '\uFEFFBloque,Dpto,Adjudicatario,Consumo (m3),Debe (Bs),Pagado (Bs),Pendiente (Bs),Estado\n';
-    
     // Ordenar por bloque y número
     const sorted = [...allocations].sort((a, b) => {
       if (a.apartment?.block !== b.apartment?.block) return (a.apartment?.block || '').localeCompare(b.apartment?.block || '');
       return (a.apartment?.number || '').localeCompare(b.apartment?.number || '', undefined, { numeric: true });
     });
 
-    sorted.forEach(a => {
-      csv += `${a.apartment?.block},${a.apartment?.number},"${a.apartment?.owner_name || ''}",${a.consumption_m3},${a.amount_due_bs},${a.amount_paid_bs},${a.pending_amount_bs},${a.status}\n`;
-    });
+    const data = sorted.map(a => ({
+      'Bloque': a.apartment?.block || '',
+      'Dpto': a.apartment?.number || '',
+      'Adjudicatario': a.apartment?.owner_name || '',
+      'Consumo (m³)': a.consumption_m3,
+      'Deuda (Bs)': a.amount_due_bs,
+      'Pagado (Bs)': a.amount_paid_bs,
+      'Pendiente (Bs)': a.pending_amount_bs,
+      'Estado': a.status
+    }));
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    
+    // Ajustar anchos de columna (opcional, pero útil)
+    const wscols = [
+      {wch: 8}, // Bloque
+      {wch: 8}, // Dpto
+      {wch: 30}, // Adjudicatario
+      {wch: 15}, // Consumo
+      {wch: 12}, // Deuda
+      {wch: 12}, // Pagado
+      {wch: 15}, // Pendiente
+      {wch: 15}  // Estado
+    ];
+    worksheet['!cols'] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Cobros Mensuales');
+    
     const pCode = periods.find(p => p.id === parseInt(selectedPeriod))?.code || 'reporte';
-    link.href = url;
-    link.setAttribute('download', `Cobros_Agua_${pCode}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    XLSX.writeFile(workbook, `Cobros_Agua_${pCode}.xlsx`);
   };
 
   return (

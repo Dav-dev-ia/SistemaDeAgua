@@ -298,6 +298,7 @@ exports.saveReadings = async (req, res) => {
 
     const saved = [];
     const errors = [];
+    const upsertPromises = [];
 
     for (const item of readings) {
       const apartmentId = parseInt(item.apartment_id);
@@ -321,12 +322,18 @@ exports.saveReadings = async (req, res) => {
         continue;
       }
 
-      const reading = await prisma.reading.upsert({
-        where: { uq_period_meter: { periodId: parseInt(id), meterId: meter.id } },
-        create: { periodId: parseInt(id), apartmentId, meterId: meter.id, previousReading, currentReading, consumptionM3, sourceJson: JSON.stringify({ source: 'manual' }) },
-        update: { previousReading, currentReading, consumptionM3, sourceJson: JSON.stringify({ source: 'manual', updated_at: new Date().toISOString() }) }
-      });
-      saved.push(reading);
+      upsertPromises.push(
+        prisma.reading.upsert({
+          where: { uq_period_meter: { periodId: parseInt(id), meterId: meter.id } },
+          create: { periodId: parseInt(id), apartmentId, meterId: meter.id, previousReading, currentReading, consumptionM3, sourceJson: JSON.stringify({ source: 'manual' }) },
+          update: { previousReading, currentReading, consumptionM3, sourceJson: JSON.stringify({ source: 'manual', updated_at: new Date().toISOString() }) }
+        })
+      );
+    }
+
+    if (upsertPromises.length > 0) {
+      const results = await prisma.$transaction(upsertPromises);
+      saved.push(...results);
     }
 
     res.json({
@@ -370,35 +377,36 @@ exports.settlePeriod = async (req, res) => {
     const pricePerM3 = notes.pricePerM3 || 7.5;
 
     let distributedTotal = 0;
-    const allocations = [];
+    const allocationsData = [];
 
     for (const reading of readings) {
       const percentage = reading.consumptionM3 / totalConsumption;
       const amountDue = Math.round(reading.consumptionM3 * pricePerM3 * 100) / 100;
       distributedTotal += amountDue;
 
-      const allocation = await prisma.allocation.create({
-        data: {
-          periodId: parseInt(id),
-          apartmentId: reading.apartmentId,
-          consumptionM3: reading.consumptionM3,
-          percentageShare: Math.round(percentage * 10000) / 100,
-          amountDueBs: amountDue,
-          amountPaidBs: 0,
-          status: 'PENDIENTE',
-          breakdownJson: JSON.stringify({
-            period_code: period.code,
-            price_per_m3: pricePerM3,
-            consumption_m3: reading.consumptionM3,
-            total_consumption_m3: totalConsumption,
-            share_percent: Math.round(percentage * 10000) / 100,
-            common_total_amount_bs: Math.round(period.totalCommonAmountBs * 100) / 100,
-            general_total_consumption_m3: generalTotal,
-            common_difference_m3: commonDifference
-          })
-        }
+      allocationsData.push({
+        periodId: parseInt(id),
+        apartmentId: reading.apartmentId,
+        consumptionM3: reading.consumptionM3,
+        percentageShare: Math.round(percentage * 10000) / 100,
+        amountDueBs: amountDue,
+        amountPaidBs: 0,
+        status: 'PENDIENTE',
+        breakdownJson: JSON.stringify({
+          period_code: period.code,
+          price_per_m3: pricePerM3,
+          consumption_m3: reading.consumptionM3,
+          total_consumption_m3: totalConsumption,
+          share_percent: Math.round(percentage * 10000) / 100,
+          common_total_amount_bs: Math.round(period.totalCommonAmountBs * 100) / 100,
+          general_total_consumption_m3: generalTotal,
+          common_difference_m3: commonDifference
+        })
       });
-      allocations.push(allocation);
+    }
+
+    if (allocationsData.length > 0) {
+      await prisma.allocation.createMany({ data: allocationsData });
     }
 
     const updatedPeriod = await prisma.billingPeriod.update({
@@ -456,6 +464,11 @@ exports.registerPayment = async (req, res) => {
     if (allocation.status === 'PAGADO') return res.status(400).json({ ok: false, message: 'Este recibo ya está pagado.' });
 
     const amountPaid = parseFloat(amount_bs);
+    const pendingAmount = Math.round((allocation.amountDueBs - allocation.amountPaidBs) * 100) / 100;
+
+    if (amountPaid > pendingAmount) {
+      return res.status(400).json({ ok: false, message: `El pago (${amountPaid} Bs) no puede exceder el monto pendiente (${pendingAmount} Bs).` });
+    }
 
     await prisma.payment.create({
       data: {
