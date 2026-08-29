@@ -253,7 +253,7 @@ exports.getPeriods = async (req, res) => {
 // ─── Crear Periodo ────────────────────────────────────────────────────────────
 exports.createPeriod = async (req, res) => {
   try {
-    const { code, common_amount, general_readings } = req.body;
+    const { code, common_amount, general_readings, price_per_m3 } = req.body;
 
     if (!code || !common_amount) {
       return res.status(400).json({ ok: false, message: 'El código y el monto común son obligatorios.' });
@@ -270,6 +270,7 @@ exports.createPeriod = async (req, res) => {
         code,
         totalCommonAmountBs: parseFloat(common_amount),
         generalMetersJson: JSON.stringify(general_readings || []),
+        notesJson: JSON.stringify({ pricePerM3: parseFloat(price_per_m3) || 7.5 }),
         status: 'OPEN'
       }
     });
@@ -365,12 +366,15 @@ exports.settlePeriod = async (req, res) => {
 
     await prisma.allocation.deleteMany({ where: { periodId: parseInt(id) } });
 
+    const notes = period.notesJson ? JSON.parse(period.notesJson) : {};
+    const pricePerM3 = notes.pricePerM3 || 7.5;
+
     let distributedTotal = 0;
     const allocations = [];
 
     for (const reading of readings) {
       const percentage = reading.consumptionM3 / totalConsumption;
-      const amountDue = Math.round(period.totalCommonAmountBs * percentage * 100) / 100;
+      const amountDue = Math.round(reading.consumptionM3 * pricePerM3 * 100) / 100;
       distributedTotal += amountDue;
 
       const allocation = await prisma.allocation.create({
@@ -384,6 +388,7 @@ exports.settlePeriod = async (req, res) => {
           status: 'PENDIENTE',
           breakdownJson: JSON.stringify({
             period_code: period.code,
+            price_per_m3: pricePerM3,
             consumption_m3: reading.consumptionM3,
             total_consumption_m3: totalConsumption,
             share_percent: Math.round(percentage * 10000) / 100,
@@ -394,19 +399,6 @@ exports.settlePeriod = async (req, res) => {
         }
       });
       allocations.push(allocation);
-    }
-
-    // Ajuste de redondeo en el último departamento
-    const roundingAdj = Math.round((period.totalCommonAmountBs - distributedTotal) * 100) / 100;
-    if (roundingAdj !== 0 && allocations.length > 0) {
-      const last = allocations[allocations.length - 1];
-      const newAmount = Math.round((last.amountDueBs + roundingAdj) * 100) / 100;
-      const prevBd = JSON.parse(last.breakdownJson || '{}');
-      await prisma.allocation.update({
-        where: { id: last.id },
-        data: { amountDueBs: newAmount, breakdownJson: JSON.stringify({ ...prevBd, rounding_adjustment_bs: roundingAdj }) }
-      });
-      distributedTotal = Math.round((distributedTotal + roundingAdj) * 100) / 100;
     }
 
     const updatedPeriod = await prisma.billingPeriod.update({

@@ -9,7 +9,8 @@ export default function Periods() {
   const [showReadings, setShowReadings] = useState(null);
   const [apartments, setApartments] = useState([]);
   const [readingsForm, setReadingsForm] = useState({});
-  const [form, setForm] = useState({ code: '', total_common_amount_bs: '', general_total_consumption_m3: '' });
+  const [readingsSearch, setReadingsSearch] = useState('');
+  const [form, setForm] = useState({ code: '', total_common_amount_bs: '', general_total_consumption_m3: '', price_per_m3: '7.5' });
   const toast = useToast();
 
   const loadPeriods = async () => {
@@ -32,11 +33,12 @@ export default function Periods() {
         code: form.code,
         common_amount: parseFloat(form.total_common_amount_bs) || 0,
         general_total_consumption_m3: parseFloat(form.general_total_consumption_m3) || 0,
+        price_per_m3: parseFloat(form.price_per_m3) || 7.5,
       });
       if (data.ok) {
         toast.success('Periodo creado exitosamente');
         setShowCreate(false);
-        setForm({ code: '', total_common_amount_bs: '', general_total_consumption_m3: '' });
+        setForm({ code: '', total_common_amount_bs: '', general_total_consumption_m3: '', price_per_m3: '7.5' });
         loadPeriods();
       } else {
         toast.error(data.message);
@@ -48,6 +50,7 @@ export default function Periods() {
 
   const openReadings = async (period) => {
     setShowReadings(period);
+    setReadingsSearch('');
     try {
       const { data } = await client.get('/admin/apartments');
       if (data.ok) {
@@ -113,6 +116,12 @@ export default function Periods() {
     }
   };
 
+  const filteredApartments = apartments.filter(a => {
+    if (!readingsSearch) return true;
+    const q = readingsSearch.toLowerCase();
+    return a.block.toLowerCase().includes(q) || a.number.toLowerCase().includes(q) || a.owner_name.toLowerCase().includes(q);
+  });
+
   if (loading) {
     return <div className="loading-overlay"><div className="spinner" /> Cargando periodos...</div>;
   }
@@ -129,7 +138,7 @@ export default function Periods() {
         </button>
       </div>
 
-      <div className="glass-card">
+      <div className="glass-card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div className="table-responsive">
           <table className="data-table">
             <thead>
@@ -197,6 +206,11 @@ export default function Periods() {
                   <span className="text-xs text-muted mt-2" style={{ display: 'block' }}>Total de la factura del proveedor de agua</span>
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Precio por m³ (Bs)</label>
+                  <input className="form-control" type="number" step="0.01" value={form.price_per_m3} onChange={e => setForm(p => ({ ...p, price_per_m3: e.target.value }))} required />
+                  <span className="text-xs text-muted mt-2" style={{ display: 'block' }}>Precio fijo por defecto: 7.5 Bs</span>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Consumo Total Medidores Generales (m³)</label>
                   <input className="form-control" type="number" step="0.01" placeholder="1280.00" value={form.general_total_consumption_m3} onChange={e => setForm(p => ({ ...p, general_total_consumption_m3: e.target.value }))} />
                   <span className="text-xs text-muted mt-2" style={{ display: 'block' }}>Suma de los 3 medidores generales</span>
@@ -219,8 +233,18 @@ export default function Periods() {
               <h3><i className="bi bi-speedometer2" style={{ marginRight: '8px', color: 'var(--accent-primary)' }} />Lecturas — {showReadings.code}</h3>
               <button className="btn btn-icon btn-outline" onClick={() => setShowReadings(null)}><i className="bi bi-x-lg" /></button>
             </div>
-            <form onSubmit={submitReadings}>
-              <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            <form onSubmit={submitReadings} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{ padding: '0 24px 16px' }}>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Buscar por bloque, departamento o nombre..." 
+                  value={readingsSearch}
+                  onChange={e => setReadingsSearch(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '0 24px' }}>
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -231,15 +255,17 @@ export default function Periods() {
                     </tr>
                   </thead>
                   <tbody>
-                    {apartments.map(a => (
+                    {filteredApartments.length === 0 ? (
+                      <tr><td colSpan={4} className="text-center">No se encontraron departamentos</td></tr>
+                    ) : filteredApartments.map(a => (
                       <tr key={a.id}>
-                        <td><strong>Blq {a.block}-{a.number}</strong></td>
-                        <td className="text-sm">{a.owner_name}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}><strong>Blq {a.block}-{a.number}</strong></td>
+                        <td className="text-sm" style={{ minWidth: '120px' }}>{a.owner_name}</td>
                         <td>
-                          <input className="form-control" type="number" step="0.01" placeholder="0.00" value={readingsForm[a.id]?.previous_reading || ''} onChange={e => handleReadingChange(a.id, 'previous_reading', e.target.value)} style={{ minWidth: '90px' }} />
+                          <input className="form-control" type="number" step="0.01" placeholder="0.00" value={readingsForm[a.id]?.previous_reading || ''} onChange={e => handleReadingChange(a.id, 'previous_reading', e.target.value)} style={{ minWidth: '80px', padding: '6px' }} />
                         </td>
                         <td>
-                          <input className="form-control" type="number" step="0.01" placeholder="0.00" value={readingsForm[a.id]?.current_reading || ''} onChange={e => handleReadingChange(a.id, 'current_reading', e.target.value)} style={{ minWidth: '90px' }} />
+                          <input className="form-control" type="number" step="0.01" placeholder="0.00" value={readingsForm[a.id]?.current_reading || ''} onChange={e => handleReadingChange(a.id, 'current_reading', e.target.value)} style={{ minWidth: '80px', padding: '6px' }} />
                         </td>
                       </tr>
                     ))}
