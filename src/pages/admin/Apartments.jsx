@@ -9,7 +9,8 @@ export default function Apartments() {
   const [blockFilter, setBlockFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ block: '', number: '', owner_name: '', phone: '', username: '', password: '', meter_code: '', is_inverted: false });
+  const defaultForm = { id: null, block: '', number: '', owner_name: '', phone: '', username: '', password: '', meter_code: '', is_inverted: false };
+  const [form, setForm] = useState(defaultForm);
   const toast = useToast();
 
   const loadData = async () => {
@@ -35,20 +36,67 @@ export default function Apartments() {
     return a.owner_name.toLowerCase().includes(q) || a.number.toLowerCase().includes(q) || a.block.toLowerCase().includes(q) || (a.phone && a.phone.includes(q));
   });
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const openCreate = () => {
+    setForm(defaultForm);
+    setShowModal(true);
+  };
+
+  const openEdit = (apt) => {
+    setForm({
+      id: apt.id,
+      block: apt.block,
+      number: apt.number,
+      owner_name: apt.owner_name,
+      phone: apt.phone || '',
+      username: apt.user?.username || '',
+      password: '',
+      meter_code: apt.meter?.code || '',
+      is_inverted: apt.meter?.is_inverted || false
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar este departamento? Se borrará todo su historial (pagos, recibos, lecturas). Esta acción es irreversible.')) return;
     try {
-      const { data } = await client.post('/admin/apartments', form);
+      const { data } = await client.delete(`/admin/apartments/${id}`);
       if (data.ok) {
-        toast.success('Departamento creado exitosamente');
-        setShowModal(false);
-        setForm({ block: '', number: '', owner_name: '', phone: '', username: '', password: '', meter_code: '', is_inverted: false });
+        toast.success('Departamento eliminado');
         loadData();
       } else {
         toast.error(data.message);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Error al crear departamento');
+      toast.error(err.response?.data?.message || 'Error al eliminar departamento');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (form.id) {
+        const { data } = await client.put(`/admin/apartments/${form.id}`, form);
+        if (data.ok) {
+          toast.success('Departamento actualizado exitosamente');
+          setShowModal(false);
+          setForm(defaultForm);
+          loadData();
+        } else {
+          toast.error(data.message);
+        }
+      } else {
+        const { data } = await client.post('/admin/apartments', form);
+        if (data.ok) {
+          toast.success('Departamento creado exitosamente');
+          setShowModal(false);
+          setForm(defaultForm);
+          loadData();
+        } else {
+          toast.error(data.message);
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Error al guardar departamento');
     }
   };
 
@@ -63,7 +111,7 @@ export default function Apartments() {
           <h1 className="page-title">Departamentos</h1>
           <p className="page-subtitle">{apartments.length} departamentos registrados</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+        <button className="btn btn-primary" onClick={openCreate}>
           <i className="bi bi-building-add" /> Nuevo Departamento
         </button>
       </div>
@@ -90,6 +138,7 @@ export default function Apartments() {
                 <th>Teléfono</th>
                 <th>Medidor</th>
                 <th className="text-center">Estado</th>
+                <th className="text-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -114,6 +163,16 @@ export default function Apartments() {
                       {apt.is_active ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
+                  <td className="center">
+                    <div className="flex gap-2 items-center" style={{ justifyContent: 'center' }}>
+                      <button className="btn btn-outline btn-sm" onClick={() => openEdit(apt)} title="Editar">
+                        <i className="bi bi-pencil" />
+                      </button>
+                      <button className="btn btn-outline btn-sm" onClick={() => handleDelete(apt.id)} title="Eliminar" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                        <i className="bi bi-trash" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -125,7 +184,7 @@ export default function Apartments() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3><i className="bi bi-building-add" style={{ marginRight: '8px', color: 'var(--accent-primary)' }} />Nuevo Departamento</h3>
+              <h3><i className={`bi bi-${form.id ? 'pencil-square' : 'building-add'}`} style={{ marginRight: '8px', color: 'var(--accent-primary)' }} />{form.id ? 'Editar Departamento' : 'Nuevo Departamento'}</h3>
               <button className="btn btn-icon btn-outline" onClick={() => setShowModal(false)}><i className="bi bi-x-lg" /></button>
             </div>
             <form onSubmit={handleSubmit}>
@@ -167,7 +226,7 @@ export default function Apartments() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Contraseña</label>
-                    <input className="form-control" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required minLength={6} />
+                    <input className="form-control" type="password" placeholder={form.id ? 'Dejar en blanco para no cambiar' : ''} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required={!form.id} minLength={form.password ? 6 : undefined} />
                   </div>
                 </div>
               </div>

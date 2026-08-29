@@ -9,6 +9,8 @@ router.get('/dashboard', adminController.getDashboard);
 router.get('/blocks', adminController.getBlocks);
 router.get('/apartments', adminController.getApartments);
 router.post('/apartments', adminController.createApartment);
+router.put('/apartments/:id', adminController.updateApartment);
+router.delete('/apartments/:id', adminController.deleteApartment);
 
 router.get('/periods', adminController.getPeriods);
 router.post('/periods', adminController.createPeriod);

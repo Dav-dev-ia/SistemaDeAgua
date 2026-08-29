@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const bcrypt = require('bcryptjs');
 
 // ─── Helpers: mapeadores a snake_case para el frontend ────────────────────────
 const mapApartment = (apt) => ({
@@ -15,6 +16,10 @@ const mapApartment = (apt) => ({
     code: apt.meters[0].code,
     is_inverted: apt.meters[0].isInverted,
     is_active: apt.meters[0].isActive,
+  } : null,
+  user: apt.users && apt.users.length > 0 ? {
+    id: apt.users[0].id,
+    username: apt.users[0].username,
   } : null
 });
 
@@ -126,7 +131,10 @@ exports.getApartments = async (req, res) => {
     }
     const apartments = await prisma.apartment.findMany({
       where,
-      include: { meters: { where: { isActive: true } } },
+      include: { 
+        meters: { where: { isActive: true } },
+        users: { where: { role: 'OWNER' } }
+      },
       orderBy: [{ block: 'asc' }, { number: 'asc' }]
     });
     // Frontend espera { ok, items: [...] }
@@ -140,16 +148,25 @@ exports.getApartments = async (req, res) => {
 // ─── Crear Departamento ───────────────────────────────────────────────────────
 exports.createApartment = async (req, res) => {
   try {
-    const { block, number, owner_name, phone, coefficient, meter_code, meter_is_inverted, is_inverted } = req.body;
+    const { block, number, owner_name, phone, coefficient, meter_code, meter_is_inverted, is_inverted, username, password } = req.body;
 
-    if (!block || !number || !owner_name || !meter_code) {
-      return res.status(400).json({ ok: false, message: 'Bloque, número, propietario y código de medidor son obligatorios.' });
+    if (!block || !number || !owner_name || !meter_code || !username || !password) {
+      return res.status(400).json({ ok: false, message: 'Bloque, número, propietario, medidor, usuario y contraseña son obligatorios.' });
     }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ ok: false, message: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { username: String(username).trim() } });
+    if (existingUser) return res.status(400).json({ ok: false, message: 'El nombre de usuario ya está en uso.' });
 
     const existing = await prisma.apartment.findUnique({
       where: { uq_apartment_block_number: { block: block.toUpperCase(), number: String(number) } }
     });
     if (existing) return res.status(400).json({ ok: false, message: 'El departamento ya existe' });
+
+    const passwordHash = await bcrypt.hash(password, 12);
 
     const apt = await prisma.apartment.create({
       data: {
@@ -163,12 +180,58 @@ exports.createApartment = async (req, res) => {
             code: meter_code,
             isInverted: meter_is_inverted || is_inverted || false
           }
+        },
+        users: {
+          create: {
+            username: String(username).trim(),
+            fullName: owner_name,
+            passwordHash,
+            role: 'OWNER',
+            isActive: true
+          }
         }
       },
-      include: { meters: true }
+      include: { meters: true, users: true }
     });
 
-    res.status(201).json({ ok: true, message: 'Departamento creado', apartment: mapApartment(apt) });
+    // Anexar al periodo activo más reciente para que el Dpto no quede huérfano
+    const lastPeriod = await prisma.billingPeriod.findFirst({
+      orderBy: { id: 'desc' }
+    });
+
+    if (lastPeriod) {
+      const meterId = apt.meters[0].id;
+      if (lastPeriod.status === 'OPEN') {
+        // Crear lectura inicial en 0 para que figure y pueda ingresar datos
+        await prisma.reading.create({
+          data: {
+            periodId: lastPeriod.id,
+            apartmentId: apt.id,
+            meterId: meterId,
+            previousReading: 0,
+            currentReading: 0,
+            consumptionM3: 0,
+            sourceJson: JSON.stringify({ source: 'auto_join' })
+          }
+        });
+      } else if (lastPeriod.status === 'CALCULATED') {
+        // Crear un recibo en 0 Bs para que aparezca en el sistema y no genere errores visuales
+        await prisma.allocation.create({
+          data: {
+            periodId: lastPeriod.id,
+            apartmentId: apt.id,
+            consumptionM3: 0,
+            percentageShare: 0,
+            amountDueBs: 0,
+            amountPaidBs: 0,
+            status: 'PAGADO', // Pagado para que no figure como deuda
+            breakdownJson: JSON.stringify({ note: 'Joined after calculation' })
+          }
+        });
+      }
+    }
+
+    res.status(201).json({ ok: true, message: 'Departamento creado exitosamente', apartment: mapApartment(apt) });
   } catch (error) {
     console.error('Error en createApartment:', error);
     res.status(500).json({ ok: false, message: 'Error interno al crear departamento' });
@@ -431,5 +494,158 @@ exports.registerPayment = async (req, res) => {
   } catch (error) {
     console.error('Error en registerPayment:', error);
     res.status(500).json({ ok: false, message: 'Error interno al registrar pago.' });
+  }
+};
+
+// ─── Actualizar Departamento ──────────────────────────────────────────────────
+exports.updateApartment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { block, number, owner_name, phone, coefficient, meter_code, meter_is_inverted, is_inverted, username, password } = req.body;
+
+    if (!block || !number || !owner_name || !meter_code || !username) {
+      return res.status(400).json({ ok: false, message: 'Bloque, número, propietario, medidor y usuario son obligatorios.' });
+    }
+
+    const aptId = parseInt(id);
+    const existingApt = await prisma.apartment.findUnique({ where: { id: aptId }, include: { meters: true, users: true } });
+    if (!existingApt) return res.status(404).json({ ok: false, message: 'Departamento no encontrado' });
+
+    // Check unique block/number
+    const duplicateApt = await prisma.apartment.findFirst({
+      where: {
+        block: block.toUpperCase(),
+        number: String(number),
+        id: { not: aptId }
+      }
+    });
+    if (duplicateApt) return res.status(400).json({ ok: false, message: 'Ya existe otro departamento con ese bloque y número.' });
+
+    // Check unique username
+    const duplicateUser = await prisma.user.findFirst({
+      where: {
+        username: String(username).trim(),
+        apartmentId: { not: aptId }
+      }
+    });
+    if (duplicateUser) return res.status(400).json({ ok: false, message: 'El nombre de usuario ya está en uso por otro departamento.' });
+
+    // Prepare user update data
+    const userUpdateData = {
+      username: String(username).trim(),
+      fullName: owner_name
+    };
+
+    if (password && password.trim().length > 0) {
+      if (password.length < 6) return res.status(400).json({ ok: false, message: 'La contraseña debe tener al menos 6 caracteres' });
+      userUpdateData.passwordHash = await bcrypt.hash(password, 12);
+    }
+
+    // Determine meter update
+    let meterId = existingApt.meters.length > 0 ? existingApt.meters[0].id : null;
+
+    // Use transaction to update all related entities
+    const updatedApt = await prisma.$transaction(async (tx) => {
+      // 1. Update apartment
+      const a = await tx.apartment.update({
+        where: { id: aptId },
+        data: {
+          block: block.toUpperCase(),
+          number: String(number),
+          ownerName: owner_name,
+          phone: phone || null,
+          coefficient: parseFloat(coefficient) || 1.0,
+        }
+      });
+
+      // 2. Update meter or create if doesn't exist
+      if (meterId) {
+        await tx.meter.update({
+          where: { id: meterId },
+          data: { code: meter_code, isInverted: meter_is_inverted || is_inverted || false }
+        });
+      } else {
+        await tx.meter.create({
+          data: {
+            apartmentId: aptId,
+            code: meter_code,
+            isInverted: meter_is_inverted || is_inverted || false
+          }
+        });
+      }
+
+      // 3. Update user or create if doesn't exist
+      const ownerUser = existingApt.users.find(u => u.role === 'OWNER');
+      if (ownerUser) {
+        await tx.user.update({
+          where: { id: ownerUser.id },
+          data: userUpdateData
+        });
+      } else {
+        if (!password || password.length < 6) {
+          throw new Error('Debe proporcionar una contraseña (mín 6 caracteres) para crear el usuario faltante.');
+        }
+        await tx.user.create({
+          data: {
+            ...userUpdateData,
+            role: 'OWNER',
+            isActive: true,
+            apartmentId: aptId
+          }
+        });
+      }
+
+      return await tx.apartment.findUnique({
+        where: { id: aptId },
+        include: { meters: true, users: true }
+      });
+    });
+
+    res.json({ ok: true, message: 'Departamento actualizado exitosamente', apartment: mapApartment(updatedApt) });
+  } catch (error) {
+    console.error('Error en updateApartment:', error);
+    res.status(500).json({ ok: false, message: error.message || 'Error interno al actualizar departamento' });
+  }
+};
+
+// ─── Eliminar Departamento (Hard Delete) ──────────────────────────────────────
+exports.deleteApartment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const aptId = parseInt(id);
+
+    const existingApt = await prisma.apartment.findUnique({ where: { id: aptId } });
+    if (!existingApt) return res.status(404).json({ ok: false, message: 'Departamento no encontrado' });
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Encontrar asignaciones para borrar pagos primero
+      const allocations = await tx.allocation.findMany({ where: { apartmentId: aptId }, select: { id: true } });
+      const allocIds = allocations.map(a => a.id);
+
+      // 2. Borrar pagos de esas asignaciones
+      if (allocIds.length > 0) {
+        await tx.payment.deleteMany({ where: { allocationId: { in: allocIds } } });
+      }
+
+      // 3. Borrar asignaciones (recibos)
+      await tx.allocation.deleteMany({ where: { apartmentId: aptId } });
+
+      // 4. Borrar lecturas
+      await tx.reading.deleteMany({ where: { apartmentId: aptId } });
+
+      // 5. Borrar usuarios
+      await tx.user.deleteMany({ where: { apartmentId: aptId } });
+
+      // 6. Borrar medidores
+      await tx.meter.deleteMany({ where: { apartmentId: aptId } });
+
+      // 7. Borrar departamento
+      await tx.apartment.delete({ where: { id: aptId } });
+    });
+
+    res.json({ ok: true, message: 'Departamento eliminado correctamente (junto a todo su historial)' });
+  } catch (error) {
+    console.error('Error en deleteApartment:', error);
+    res.status(500).json({ ok: false, message: 'Error interno al eliminar departamento' });
   }
 };
