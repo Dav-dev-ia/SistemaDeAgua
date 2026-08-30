@@ -3,22 +3,58 @@ import client from '../api/client';
 
 const AuthContext = createContext(null);
 
+const normalizeUser = (raw) => {
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    username: raw.username,
+    fullName: raw.full_name ?? raw.fullName,
+    role: raw.role,
+    isActive: raw.is_active ?? raw.isActive,
+    apartmentId: raw.apartment_id ?? raw.apartmentId,
+  };
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('user');
+      return saved ? normalizeUser(JSON.parse(saved)) : null;
+    } catch {
+      return null;
+    }
   });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const onStorage = () => {
+      try {
+        const saved = localStorage.getItem('user');
+        const token = localStorage.getItem('access_token');
+        if (!token && user) {
+          setUser(null);
+        } else if (saved) {
+          const normalized = normalizeUser(JSON.parse(saved));
+          setUser((prev) => (JSON.stringify(prev) !== JSON.stringify(normalized) ? normalized : prev));
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [user]);
 
   const login = useCallback(async (username, password) => {
     setLoading(true);
     try {
       const { data } = await client.post('/auth/login', { username, password });
       if (data.ok) {
+        const normalized = normalizeUser(data.user);
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        setUser(data.user);
-        return { ok: true, user: data.user };
+        setUser(normalized);
+        return { ok: true, user: normalized };
       }
       return { ok: false, message: data.message };
     } catch (err) {

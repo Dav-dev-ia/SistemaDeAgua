@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import client from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 
@@ -9,11 +9,13 @@ export default function Apartments() {
   const [blockFilter, setBlockFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const defaultForm = { id: null, block: '', number: '', owner_name: '', phone: '', username: '', password: '', meter_code: '', is_inverted: false };
   const [form, setForm] = useState(defaultForm);
   const toast = useToast();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
       const [aptRes, blkRes] = await Promise.all([
         client.get('/admin/apartments', { params: { block: blockFilter || undefined, search: search || undefined } }),
@@ -26,15 +28,18 @@ export default function Apartments() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [blockFilter, search, toast]);
 
-  useEffect(() => { loadData(); }, [blockFilter]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const filtered = apartments.filter(a => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return a.owner_name.toLowerCase().includes(q) || a.number.toLowerCase().includes(q) || a.block.toLowerCase().includes(q) || (a.phone && a.phone.includes(q));
-  });
+  useEffect(() => {
+    if (!showModal) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setShowModal(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showModal]);
 
   const openCreate = () => {
     setForm(defaultForm);
@@ -73,30 +78,25 @@ export default function Apartments() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
-      if (form.id) {
-        const { data } = await client.put(`/admin/apartments/${form.id}`, form);
-        if (data.ok) {
-          toast.success('Departamento actualizado exitosamente');
-          setShowModal(false);
-          setForm(defaultForm);
-          loadData();
-        } else {
-          toast.error(data.message);
-        }
+      const url = form.id
+        ? client.put(`/admin/apartments/${form.id}`, form)
+        : client.post('/admin/apartments', form);
+      const { data } = await url;
+      if (data.ok) {
+        toast.success(form.id ? 'Departamento actualizado exitosamente' : 'Departamento creado exitosamente');
+        setShowModal(false);
+        setForm(defaultForm);
+        loadData();
       } else {
-        const { data } = await client.post('/admin/apartments', form);
-        if (data.ok) {
-          toast.success('Departamento creado exitosamente');
-          setShowModal(false);
-          setForm(defaultForm);
-          loadData();
-        } else {
-          toast.error(data.message);
-        }
+        toast.error(data.message);
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error al guardar departamento');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -142,9 +142,9 @@ export default function Apartments() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={6}><div className="empty-state"><i className="bi bi-building" /><p>No se encontraron departamentos</p></div></td></tr>
-              ) : filtered.map(apt => (
+              {apartments.length === 0 ? (
+                <tr><td colSpan={7}><div className="empty-state"><i className="bi bi-building" /><p>No se encontraron departamentos</p></div></td></tr>
+              ) : apartments.map(apt => (
                 <tr key={apt.id}>
                   <td><span className="status-badge open">Bloque {apt.block}</span></td>
                   <td><strong>{apt.number}</strong></td>
@@ -231,8 +231,10 @@ export default function Apartments() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary"><i className="bi bi-check-lg" /> Guardar</button>
+                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)} disabled={submitting}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Guardando...</> : <><i className="bi bi-check-lg" /> Guardar</>}
+                </button>
               </div>
             </form>
           </div>

@@ -126,7 +126,8 @@ exports.getApartments = async (req, res) => {
       where.OR = [
         { ownerName: { contains: search, mode: 'insensitive' } },
         { number: { contains: search, mode: 'insensitive' } },
-        { block: { contains: search, mode: 'insensitive' } }
+        { block: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } }
       ];
     }
 
@@ -271,7 +272,13 @@ exports.getPeriods = async (req, res) => {
 // ─── Crear Periodo ────────────────────────────────────────────────────────────
 exports.createPeriod = async (req, res) => {
   try {
-    const { code, common_amount, general_readings, price_per_m3 } = req.body;
+    const {
+      code,
+      common_amount,
+      general_total_consumption_m3,
+      price_per_m3,
+      general_readings,
+    } = req.body;
 
     if (!code || !common_amount) {
       return res.status(400).json({ ok: false, message: 'El código y el monto común son obligatorios.' });
@@ -287,6 +294,7 @@ exports.createPeriod = async (req, res) => {
       data: {
         code,
         totalCommonAmountBs: parseFloat(common_amount),
+        generalTotalConsumptionM3: parseFloat(general_total_consumption_m3 ?? 0),
         generalMetersJson: JSON.stringify(general_readings || []),
         notesJson: JSON.stringify({ pricePerM3: parseFloat(price_per_m3) || 7.5 }),
         status: 'OPEN'
@@ -454,12 +462,35 @@ exports.settlePeriod = async (req, res) => {
 exports.getAllocations = async (req, res) => {
   try {
     const { id } = req.params;
+    const { status, search } = req.query;
+    const periodId = parseInt(id);
+
+    let apartmentWhere = undefined;
+    if (search) {
+      apartmentWhere = {
+        OR: [
+          { ownerName: { contains: search, mode: 'insensitive' } },
+          { number: { contains: search, mode: 'insensitive' } },
+          { block: { contains: search, mode: 'insensitive' } }
+        ]
+      };
+    }
+
+    const where = { periodId };
+    if (status) where.status = status;
+    if (apartmentWhere) where.apartment = apartmentWhere;
+
     const allocations = await prisma.allocation.findMany({
-      where: { periodId: parseInt(id) },
-      include: { apartment: { include: { meters: { where: { isActive: true } } } }, payments: true },
-      orderBy: [{ apartment: { block: 'asc' } }, { apartment: { number: 'asc' } }]
+      where,
+      include: {
+        apartment: { include: { meters: { where: { isActive: true } } } },
+        payments: true
+      },
+      orderBy: [
+        { apartment: { block: 'asc' } },
+        { apartment: { number: 'asc' } }
+      ]
     });
-    // Frontend espera { ok, items: [...] }
     res.json({ ok: true, items: allocations.map(mapAllocation) });
   } catch (error) {
     console.error('Error en getAllocations:', error);

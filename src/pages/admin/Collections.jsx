@@ -10,6 +10,7 @@ export default function Collections() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [payModal, setPayModal] = useState(null);
   const [payForm, setPayForm] = useState({ amount_bs: '', payment_method: 'EFECTIVO', reference: '' });
   const toast = useToast();
@@ -33,15 +34,16 @@ export default function Collections() {
     }).then(({ data }) => {
       if (data.ok) setAllocations(data.items || []);
     }).finally(() => setLoading(false));
-  }, [selectedPeriod, statusFilter]);
+  }, [selectedPeriod, statusFilter, search]);
 
-  const filtered = allocations.filter(a => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return a.apartment?.owner_name?.toLowerCase().includes(q) ||
-      a.apartment?.number?.toLowerCase().includes(q) ||
-      a.apartment?.block?.toLowerCase().includes(q);
-  });
+  useEffect(() => {
+    if (!payModal) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setPayModal(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [payModal]);
 
   const openPay = (alloc) => {
     setPayModal(alloc);
@@ -50,6 +52,8 @@ export default function Collections() {
 
   const submitPayment = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const { data } = await client.post(`/admin/allocations/${payModal.id}/payments`, {
         amount_bs: parseFloat(payForm.amount_bs),
@@ -59,14 +63,17 @@ export default function Collections() {
       if (data.ok) {
         toast.success(`Pago registrado — Dpto ${data.allocation?.apartment?.number || ''}`);
         setPayModal(null);
-        // Refresh allocations
-        const res = await client.get(`/admin/periods/${selectedPeriod}/allocations`);
+        const res = await client.get(`/admin/periods/${selectedPeriod}/allocations`, {
+          params: { status: statusFilter || undefined, search: search || undefined }
+        });
         if (res.data.ok) setAllocations(res.data.items || []);
       } else {
         toast.error(data.message);
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Error al registrar pago');
+    } finally {
+      setSubmitting(false);
     }
   };
 

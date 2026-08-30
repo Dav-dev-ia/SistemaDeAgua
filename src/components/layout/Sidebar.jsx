@@ -52,11 +52,18 @@ export default function Sidebar({ isOpen, onClose }) {
 
         <div className="sidebar-footer">
           <div style={{ color: 'var(--text-sidebar)', fontSize: '0.78rem', marginBottom: '8px', padding: '0 12px' }}>
-            <strong>{user?.full_name}</strong>
+            <strong>{user?.fullName || user?.full_name || user?.username}</strong>
             <br />
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{user?.role}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+              {user?.role === 'ADMIN' ? 'Administrador' : 'Adjudicatario'}
+            </span>
           </div>
-          <button className="sidebar-link" onClick={logout} style={{ color: '#ef4444' }}>
+          <button
+            className="sidebar-link"
+            onClick={logout}
+            style={{ color: '#ef4444' }}
+            aria-label="Cerrar sesión"
+          >
             <i className="bi bi-box-arrow-left" />
             Cerrar Sesión
           </button>

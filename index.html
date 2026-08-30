@@ -1,11 +1,41 @@
 <!doctype html>
-<html lang="es" data-theme="dark">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0ea5e9" />
     <meta name="description" content="AguaPago — Sistema de control de consumo y cobro de agua para condominios. Gestiona lecturas, consumo y pagos de departamentos." />
+    <meta name="keywords" content="agua, condominio, cobro, medidor, consumo, facturación, administración" />
+    <meta name="author" content="AguaPago" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="AguaPago — Control de Agua del Condominio" />
+    <meta property="og:description" content="Sistema integral de gestión de consumo y cobro de agua para condominios. Lecturas, liquidaciones y pagos en un solo lugar." />
+    <meta property="og:locale" content="es_ES" />
+    <meta property="og:site_name" content="AguaPago" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AguaPago — Control de Agua del Condominio" />
+    <meta name="twitter:description" content="Sistema integral de gestión de consumo y cobro de agua para condominios." />
+
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💧</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
     <title>AguaPago — Control de Agua del Condominio</title>
+
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var pref = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', pref);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
