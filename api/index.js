@@ -8,6 +8,16 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const ownerRoutes = require('./routes/owner');
 
+// ─── Validación crítica de variables de entorno ───────────────────────────────
+const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET_KEY'];
+const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.error(`[FATAL] Variables de entorno faltantes: ${missingEnv.join(', ')}`);
+  console.error('[FATAL] Configúralas en el panel de Vercel > Settings > Environment Variables');
+  // No hacemos process.exit() para no romper el cold start de Vercel,
+  // pero los endpoints fallarán con mensajes claros
+}
+
 const app = express();
 
 // ─── Seguridad CORS: solo permite el frontend de producción y localhost ────────
@@ -64,7 +74,16 @@ app.use((req, res) => {
 
 // ─── Error global ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('[ERROR]', err.message);
+  // Errores de CORS
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ ok: false, message: 'Origen no permitido' });
+  }
+  // Errores de Prisma / base de datos
+  if (err.code && (err.code.startsWith('P') || err.code === 'ECONNREFUSED')) {
+    console.error('[DB ERROR] Código:', err.code);
+    return res.status(503).json({ ok: false, message: 'Error de conexión a la base de datos. Intenta de nuevo en unos segundos.' });
+  }
   res.status(500).json({ ok: false, message: 'Error interno del servidor' });
 });
 
