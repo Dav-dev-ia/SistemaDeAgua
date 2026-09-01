@@ -26,6 +26,7 @@ export function AuthProvider({ children }) {
   });
   const [loading, setLoading] = useState(false);
 
+  // Sincronizar sesión entre pestañas
   useEffect(() => {
     const onStorage = () => {
       try {
@@ -38,7 +39,7 @@ export function AuthProvider({ children }) {
           setUser((prev) => (JSON.stringify(prev) !== JSON.stringify(normalized) ? normalized : prev));
         }
       } catch {
-        // ignore parse errors
+        // ignorar errores de parse
       }
     };
     window.addEventListener('storage', onStorage);
@@ -48,7 +49,10 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (username, password) => {
     setLoading(true);
     try {
-      const { data } = await client.post('/auth/login', { username, password });
+      const { data } = await client.post('/auth/login', {
+        username: username.trim().toLowerCase(),
+        password
+      });
       if (data.ok) {
         const normalized = normalizeUser(data.user);
         localStorage.setItem('access_token', data.access_token);
@@ -56,9 +60,27 @@ export function AuthProvider({ children }) {
         setUser(normalized);
         return { ok: true, user: normalized };
       }
-      return { ok: false, message: data.message };
+      return { ok: false, message: data.message, retry: data.retry };
     } catch (err) {
-      return { ok: false, message: err.response?.data?.message || 'Error de conexión' };
+      const status = err.response?.status;
+      const serverMsg = err.response?.data?.message;
+      const retry = err.response?.data?.retry;
+
+      // Mensajes de error según el tipo
+      let message;
+      if (!err.response) {
+        message = 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
+      } else if (status === 503) {
+        message = serverMsg || 'La base de datos está iniciando. Intenta de nuevo en unos segundos.';
+      } else if (status === 401) {
+        message = serverMsg || 'Usuario o contraseña incorrectos';
+      } else if (status === 429) {
+        message = 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.';
+      } else {
+        message = serverMsg || 'Error de conexión. Intenta de nuevo.';
+      }
+
+      return { ok: false, message, retry: retry || status === 503 || !err.response };
     } finally {
       setLoading(false);
     }
@@ -70,7 +92,12 @@ export function AuthProvider({ children }) {
       const { data } = await client.post('/auth/register', formData);
       return { ok: data.ok, message: data.message };
     } catch (err) {
-      return { ok: false, message: err.response?.data?.message || 'Error de conexión' };
+      const serverMsg = err.response?.data?.message;
+      return {
+        ok: false,
+        message: serverMsg || 'Error de conexión. Intenta de nuevo.',
+        retry: err.response?.status === 503 || !err.response
+      };
     } finally {
       setLoading(false);
     }
