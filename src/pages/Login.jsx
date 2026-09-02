@@ -8,6 +8,7 @@ import { warmupBackend } from '../api/client';
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const { login, loading } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -15,8 +16,6 @@ export default function Login() {
   const navigate = useNavigate();
 
   // ─── Wake-up de Neon al montar el componente ─────────────────────────────
-  // Esto inicia la conexión a Neon ANTES de que el usuario haga clic en
-  // "Ingresar", reduciendo el tiempo de espera percibido.
   useEffect(() => {
     let cancelled = false;
     const warmup = async () => {
@@ -33,7 +32,6 @@ export default function Login() {
     e.preventDefault();
     setStatusMsg('');
 
-    // Mostrar mensaje de espera si tarda (Neon cold start)
     const waitTimer = setTimeout(() => {
       setStatusMsg('Conectando con el servidor... La base de datos puede tardar unos segundos en iniciar.');
     }, 4000);
@@ -52,7 +50,6 @@ export default function Login() {
       toast.success('¡Bienvenido!');
       navigate(result.user.role === 'ADMIN' ? '/admin' : '/mi-consumo');
     } else {
-      // Mensajes amigables para errores comunes
       const msg = result.message || 'Error de conexión';
       if (result.retry || msg.toLowerCase().includes('disponible') || msg.toLowerCase().includes('conexión')) {
         toast.error('El servidor está iniciando. Por favor, intenta de nuevo en unos segundos.');
@@ -95,17 +92,46 @@ export default function Login() {
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="login-pass">Contraseña</label>
-            <input
-              id="login-pass"
-              className="form-control"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              disabled={loading}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                id="login-pass"
+                className="form-control"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                disabled={loading}
+                style={{ paddingRight: '44px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px 6px',
+                  color: 'var(--text-muted, #94a3b8)',
+                  fontSize: '1.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '4px',
+                  transition: 'color 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--color-primary, #22d3ee)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted, #94a3b8)'}
+              >
+                <i className={`bi bi-${showPassword ? 'eye-slash-fill' : 'eye-fill'}`} />
+              </button>
+            </div>
           </div>
 
           {/* Mensaje de estado durante espera */}
