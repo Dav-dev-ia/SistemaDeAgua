@@ -56,16 +56,17 @@ async function main() {
   console.log('========================================');
 
   // Test 1: Admin
-  const adminOk = await testCredentials('admin', 'Admin2026!');
+  const adminOk = await testCredentials('admin', 'admin123');
 
   // Test 2: Admin con mayúsculas
-  const adminUpperOk = await testCredentials('Admin', 'Admin2026!');
+  const adminUpperOk = await testCredentials('Admin', 'admin123');
 
   // Test 3: Owner Juan
-  const juanOk = await testCredentials('juan', 'Juan2026!');
+  const juanOk = await testCredentials('juan', 'juan123');
 
   // Test 4: Owner Juan con mayúsculas
-  const juanUpperOk = await testCredentials('Juan', 'Juan2026!');
+  const juanUpperOk = await testCredentials('Juan', 'juan123');
+
 
   console.log('\n========================================');
   console.log(' RESUMEN:');

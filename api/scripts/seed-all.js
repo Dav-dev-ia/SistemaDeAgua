@@ -6,8 +6,8 @@ const bcrypt = require('bcryptjs');
 async function main() {
   console.log('--- Configurando usuarios de prueba y verificando BD ---');
 
-  // 1. Admin
-  const adminPasswordHash = await bcrypt.hash('Admin2026!', 12);
+  // 1. Admin (admin / admin123)
+  const adminPasswordHash = await bcrypt.hash('admin123', 12);
   const admin = await withRetry(() => prisma.user.upsert({
     where: { username: 'admin' },
     update: {
@@ -16,6 +16,7 @@ async function main() {
       isActive: true,
       fullName: 'Administrador General'
     },
+
     create: {
       username: 'admin',
       fullName: 'Administrador General',
@@ -63,8 +64,8 @@ async function main() {
   }
   console.log('✅ Departamento configurado:', `Bloque ${apt.block} - Dpto ${apt.number}`);
 
-  // 3. Owner Juan
-  const juanPasswordHash = await bcrypt.hash('Juan2026!', 12);
+  // 3. Owner Juan (juan / juan123)
+  const juanPasswordHash = await bcrypt.hash('juan123', 12);
   const juan = await withRetry(() => prisma.user.upsert({
     where: { username: 'juan' },
     update: {
@@ -91,15 +92,16 @@ async function main() {
   console.log('========================================');
   console.log('👤 Administrador:');
   console.log('   Usuario:    admin');
-  console.log('   Contraseña: Admin2026!');
+  console.log('   Contraseña: admin123');
   console.log('----------------------------------------');
   console.log('👤 Propietario (Adjudicatario):');
   console.log('   Usuario:    juan');
-  console.log('   Contraseña: Juan2026!');
+  console.log('   Contraseña: juan123');
   console.log('   Bloque:     2');
   console.log('   Dpto:       202');
   console.log('========================================\n');
 }
+
 
 main()
   .catch((err) => {
