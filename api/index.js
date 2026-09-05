@@ -23,33 +23,14 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ─── Seguridad CORS ────────────────────────────────────────────────────────────
-const allowedOrigins = [
-  'https://proyectoagua2.vercel.app',
-  'https://proyecto-agua-2.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-];
-
-// Aceptar subdominios de Vercel y cualquier puerto de localhost/127.0.0.1
-function isAllowedOrigin(origin) {
-  if (!origin) return true; // Postman, curl, SSR, serverless
-  if (allowedOrigins.includes(origin)) return true;
-  if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return true;
-  if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return true;
-  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
-  return false;
-}
-
+// Permitir solicitudes de cualquier frontend (Vercel, previews, localhost, etc.)
 app.use(cors({
-  origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) return callback(null, true);
-    callback(new Error('Origen no permitido por CORS'));
-  },
+  origin: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
 
 app.use(express.json({ limit: '1mb' }));
 app.use(helmet());
