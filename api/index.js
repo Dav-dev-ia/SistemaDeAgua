@@ -31,13 +31,13 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
 ];
 
-// Aceptar cualquier subdominio de vercel.app del proyecto
+// Aceptar subdominios de Vercel y cualquier puerto de localhost/127.0.0.1
 function isAllowedOrigin(origin) {
-  if (!origin) return true; // Postman, curl, etc.
+  if (!origin) return true; // Postman, curl, SSR, serverless
   if (allowedOrigins.includes(origin)) return true;
-  // Permitir previews de Vercel (ej: proyecto-agua-2-xxx.vercel.app)
-  if (/^https:\/\/proyecto-?agua-?2[^.]*\.vercel\.app$/.test(origin)) return true;
-  if (/^https:\/\/proyectoagua2[^.]*\.vercel\.app$/.test(origin)) return true;
+  if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return true;
+  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
   return false;
 }
 
@@ -55,35 +55,30 @@ app.use(express.json({ limit: '1mb' }));
 app.use(helmet());
 
 // ─── Rate limiters ────────────────────────────────────────────────────────────
-// Más permisivo para el free tier (evita bloqueos accidentales)
+const isDev = process.env.NODE_ENV !== 'production';
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200, // 200 requests por 15min por IP
+  max: 300, // 300 requests por 15min
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, message: 'Demasiadas peticiones. Intenta nuevamente en unos minutos.' },
-  // Saltar si la IP es interna de Vercel
-  skip: (req) => req.ip === '127.0.0.1',
+  skip: (req) => isDev || req.ip === '127.0.0.1' || req.ip === '::1',
 });
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30, // 30 intentos de login por 15min (más tolerante para testing)
+  max: 50, // 50 intentos de login por 15min
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, message: 'Demasiados intentos de autenticación. Espera 15 minutos.' },
-  skip: (req) => req.ip === '127.0.0.1',
+  skip: (req) => isDev || req.ip === '127.0.0.1' || req.ip === '::1',
 });
 
 app.use(limiter);
 
-// ─── Rutas ────────────────────────────────────────────────────────────────────
-app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/owner', ownerRoutes);
-
-// ─── Health check con info de DB ──────────────────────────────────────────────
-app.get('/api/health', async (req, res) => {
+// ─── Health check con info de DB (disponible en /api/health y /health) ────────
+const healthHandler = async (req, res) => {
   const health = {
     ok: true,
     status: 'operational',
@@ -94,7 +89,6 @@ app.get('/api/health', async (req, res) => {
     }
   };
 
-  // Test rápido de BD (sin fallar el health check si la BD está lenta)
   try {
     const prisma = require('./lib/prisma');
     await Promise.race([
@@ -105,17 +99,31 @@ app.get('/api/health', async (req, res) => {
   } catch (err) {
     health.database = 'unavailable';
     health.db_error = err.message?.substring(0, 100);
-    // No marcar como error total, el servidor sigue vivo
   }
 
   res.json(health);
-});
+};
 
-// ─── Ping para "wake up" de Neon (sin autenticación) ─────────────────────────
-// El frontend puede llamar esto antes del login para despertar a Neon
-app.get('/api/ping', (req, res) => {
+const pingHandler = (req, res) => {
   res.json({ ok: true, ts: Date.now() });
-});
+};
+
+// ─── Rutas (soporta prefijos con y sin /api para compatibilidad en Vercel) ─────
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
+
+app.get('/api/ping', pingHandler);
+app.get('/ping', pingHandler);
+
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/auth', authLimiter, authRoutes);
+
+app.use('/api/admin', adminRoutes);
+app.use('/admin', adminRoutes);
+
+app.use('/api/owner', ownerRoutes);
+app.use('/owner', ownerRoutes);
+
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

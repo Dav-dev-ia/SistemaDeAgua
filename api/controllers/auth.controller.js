@@ -57,7 +57,11 @@ exports.login = async (req, res) => {
     if (!user) {
       try {
         user = await withRetry(
-          () => prisma.user.findUnique({ where: { username: usernameClean } }),
+          () => prisma.user.findFirst({
+            where: {
+              username: { equals: usernameClean, mode: 'insensitive' }
+            }
+          }),
           3,   // 3 reintentos
           2000 // 2s base (se multiplica por intento: 2s, 4s, 6s)
         );
@@ -70,6 +74,7 @@ exports.login = async (req, res) => {
         });
       }
     }
+
 
     // 3. Validar usuario
     if (!user || !user.isActive) {
@@ -144,11 +149,15 @@ exports.register = async (req, res) => {
 
     const usernameClean = String(username).trim().toLowerCase();
 
-    // Verificar usuario existente con retry
+    // Verificar usuario existente con retry (case-insensitive)
     let existingUser;
     try {
       existingUser = await withRetry(
-        () => prisma.user.findUnique({ where: { username: usernameClean } }),
+        () => prisma.user.findFirst({
+          where: {
+            username: { equals: usernameClean, mode: 'insensitive' }
+          }
+        }),
         3, 2000
       );
     } catch (dbError) {
@@ -242,11 +251,12 @@ exports.bootstrapAdmin = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    const adminUsernameClean = String(username).trim().toLowerCase();
 
     const user = await withRetry(
       () => prisma.user.create({
         data: {
-          username: String(username).trim(),
+          username: adminUsernameClean,
           fullName: String(full_name).trim(),
           passwordHash,
           role: 'ADMIN',
@@ -262,6 +272,7 @@ exports.bootstrapAdmin = async (req, res) => {
       user: { id: user.id, username: user.username, full_name: user.fullName, role: user.role }
     });
   } catch (error) {
+
     console.error('[BOOTSTRAP] Error:', error.message);
     res.status(500).json({ ok: false, message: 'Error en el servidor' });
   }

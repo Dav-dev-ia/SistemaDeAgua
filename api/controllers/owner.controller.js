@@ -42,8 +42,14 @@ exports.getDashboard = async (req, res) => {
         owner_name: user.apartment.ownerName,
         phone: user.apartment.phone,
         coefficient: user.apartment.coefficient,
-        meter: user.apartment.meters.find(m => m.isActive) || null
+        meter: user.apartment.meters.find(m => m.isActive) ? {
+          id: user.apartment.meters.find(m => m.isActive).id,
+          code: user.apartment.meters.find(m => m.isActive).code,
+          is_inverted: user.apartment.meters.find(m => m.isActive).isInverted,
+          is_active: user.apartment.meters.find(m => m.isActive).isActive
+        } : null
       },
+
       stats: {
         total_debt_bs: Math.round(totalDebt * 100) / 100,
         total_paid_bs: Math.round(totalPaid * 100) / 100,

@@ -91,32 +91,56 @@ async function main() {
       console.log('   User:', data.user?.username, '| Role:', data.user?.role);
       console.log('   Token generado:', data.access_token ? '✅' : '❌');
     } else {
-      console.log(`❌ Login falló: status=${status}`, data);
-      if (status === 401) console.log('   ⚠️  Contraseña incorrecta. Ejecuta: node scripts/seed-admin.js --reset');
-      if (status === 503) console.log('   ⚠️  BD no disponible. Verifica DATABASE_URL en Vercel env vars.');
+      console.log(`❌ Login admin falló: status=${status}`, data);
       allPassed = false;
     }
   } catch (err) {
-    console.log('❌ Login error:', err.message);
+    console.log('❌ Login admin error:', err.message);
     allPassed = false;
+  }
+
+  // 4. Login Owner
+  console.log('\n--- 4. Login Propietario (juan) ---');
+  try {
+    const start = Date.now();
+    const { status, data } = await fetchJSON(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'juan', password: 'Juan2026!' })
+    });
+    const elapsed = Date.now() - start;
+    if (status === 200 && data.ok) {
+      console.log(`✅ Login propietario exitoso (${elapsed}ms)`);
+      console.log('   User:', data.user?.username, '| Role:', data.user?.role);
+    } else {
+      console.log(`⚠️ Login propietario no verificado (puede no existir aún en producción): status=${status}`);
+    }
+  } catch (err) {
+    console.log('⚠️ Login propietario error:', err.message);
   }
 
   // Resultado final
   console.log('\n========================================');
   if (allPassed) {
-    console.log('✅ SISTEMA OPERATIVO - Todo funciona correctamente');
-    console.log('\n📋 Credenciales de acceso:');
-    console.log('   Usuario:    admin');
-    console.log('   Contraseña: ' + ADMIN_PASSWORD);
+    console.log('✅ SISTEMA OPERATIVO - Autenticación y Backend OK');
+    console.log('\n📋 Credenciales para probar:');
+    console.log('   👑 ADMIN:');
+    console.log('      Usuario:    admin');
+    console.log('      Contraseña: ' + ADMIN_PASSWORD);
+    console.log('   🏠 PROPIETARIO:');
+    console.log('      Usuario:    juan');
+    console.log('      Contraseña: Juan2026!');
+    console.log('      Bloque / Dpto: Bloque 2 - Dpto 202');
   } else {
     console.log('❌ SISTEMA CON PROBLEMAS - Revisar los errores arriba');
     console.log('\n🔧 Checklist de Vercel:');
     console.log('   1. DATABASE_URL → Neon pooler URL (con ?sslmode=require)');
     console.log('   2. DIRECT_URL → Neon direct URL (para migraciones)');
     console.log('   3. JWT_SECRET_KEY → clave secreta fuerte');
-    console.log('   4. ADMIN_PASSWORD → Admin2026! (o la que quieras)');
+    console.log('   4. ADMIN_PASSWORD → Admin2026!');
   }
   console.log('========================================\n');
+
 }
 
 main().catch((err) => {

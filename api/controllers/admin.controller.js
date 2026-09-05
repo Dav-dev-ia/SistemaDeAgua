@@ -177,7 +177,13 @@ exports.createApartment = async (req, res) => {
       return res.status(400).json({ ok: false, message: 'La contraseña debe tener al menos 6 caracteres' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { username: String(username).trim() } });
+    const cleanUsername = String(username).trim().toLowerCase();
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        username: { equals: cleanUsername, mode: 'insensitive' }
+      }
+    });
     if (existingUser) return res.status(400).json({ ok: false, message: 'El nombre de usuario ya está en uso.' });
 
     const existing = await prisma.apartment.findUnique({
@@ -202,7 +208,7 @@ exports.createApartment = async (req, res) => {
         },
         users: {
           create: {
-            username: String(username).trim(),
+            username: cleanUsername,
             fullName: owner_name,
             passwordHash,
             role: 'OWNER',
@@ -212,6 +218,7 @@ exports.createApartment = async (req, res) => {
       },
       include: { meters: true, users: true }
     });
+
 
     // Anexar al periodo activo más reciente para que el Dpto no quede huérfano
     const lastPeriod = await prisma.billingPeriod.findFirst({
@@ -575,10 +582,11 @@ exports.updateApartment = async (req, res) => {
     });
     if (duplicateApt) return res.status(400).json({ ok: false, message: 'Ya existe otro departamento con ese bloque y número.' });
 
-    // Check unique username
+    // Check unique username (case-insensitive)
+    const cleanUsername = String(username).trim().toLowerCase();
     const duplicateUser = await prisma.user.findFirst({
       where: {
-        username: String(username).trim(),
+        username: { equals: cleanUsername, mode: 'insensitive' },
         apartmentId: { not: aptId }
       }
     });
@@ -586,9 +594,10 @@ exports.updateApartment = async (req, res) => {
 
     // Prepare user update data
     const userUpdateData = {
-      username: String(username).trim(),
+      username: cleanUsername,
       fullName: owner_name
     };
+
 
     if (password && password.trim().length > 0) {
       if (password.length < 6) return res.status(400).json({ ok: false, message: 'La contraseña debe tener al menos 6 caracteres' });
