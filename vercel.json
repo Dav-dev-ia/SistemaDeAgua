@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install && cd api && npm install",
   "functions": {
     "api/index.js": {
       "maxDuration": 30,
