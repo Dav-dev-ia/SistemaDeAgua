@@ -179,15 +179,16 @@ export default function Periods() {
       <div className="glass-card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div className="table-responsive">
           <table className="data-table">
+            <caption className="sr-only">Lista de periodos de facturación</caption>
             <thead>
               <tr>
-                <th>Periodo</th>
-                <th className="text-right">Monto Total (Bs)</th>
-                <th className="text-right">Consumo General (m³)</th>
-                <th className="text-right">Consumo Individual (m³)</th>
-                <th className="text-right">Diferencia (m³)</th>
-                <th className="text-center">Estado</th>
-                <th className="text-center">Acciones</th>
+                <th scope="col">Periodo</th>
+                <th scope="col" className="text-right">Monto Total (Bs)</th>
+                <th scope="col" className="text-right">Consumo General (m³)</th>
+                <th scope="col" className="text-right">Consumo Individual (m³)</th>
+                <th scope="col" className="text-right">Diferencia (m³)</th>
+                <th scope="col" className="text-center">Estado</th>
+                <th scope="col" className="text-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -207,11 +208,11 @@ export default function Periods() {
                   </td>
                   <td className="center">
                     <div className="flex gap-2 items-center" style={{ justifyContent: 'center' }}>
-                      <button className="btn btn-outline btn-sm" onClick={() => openReadings(p)} title="Cargar lecturas">
+                      <button className="btn btn-outline btn-sm" onClick={() => openReadings(p)} title="Cargar lecturas" aria-label={`Cargar lecturas del periodo ${p.code}`}>
                         <i className="bi bi-file-earmark-plus" />
                       </button>
                       {p.status === 'OPEN' && (
-                        <button className="btn btn-success btn-sm" onClick={() => handleSettle(p.id)} title="Liquidar periodo">
+                        <button className="btn btn-success btn-sm" onClick={() => handleSettle(p.id)} title="Liquidar periodo" aria-label={`Liquidar el periodo ${p.code}`}>
                           <i className="bi bi-calculator" />
                         </button>
                       )}

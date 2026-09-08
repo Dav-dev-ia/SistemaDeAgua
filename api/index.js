@@ -193,7 +193,7 @@ app.use((req, res) => {
 });
 
 // ─── Error global ─────────────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('[ERROR]', err.message);
 
   if (err.message && err.message.includes('CORS')) {

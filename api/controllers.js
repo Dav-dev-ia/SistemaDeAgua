@@ -617,7 +617,7 @@ exports.updateApartment = async (req, res) => {
     const meterId = existingApt.meters.length > 0 ? existingApt.meters[0].id : null;
 
     const updatedApt = await prisma.$transaction(async (tx) => {
-      const a = await tx.apartment.update({
+      await tx.apartment.update({
         where: { id: aptId },
         data: {
           block: block.toUpperCase(),

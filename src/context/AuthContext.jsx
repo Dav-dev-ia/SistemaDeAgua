@@ -74,6 +74,8 @@ export function AuthProvider({ children }) {
         message = serverMsg || 'La base de datos está iniciando. Intenta de nuevo en unos segundos.';
       } else if (status === 401) {
         message = serverMsg || 'Usuario o contraseña incorrectos';
+      } else if (status === 403) {
+        message = serverMsg || 'Tu cuenta está pendiente de activación por el administrador.';
       } else if (status === 429) {
         message = 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.';
       } else {

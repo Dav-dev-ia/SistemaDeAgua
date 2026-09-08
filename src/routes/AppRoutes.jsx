@@ -8,6 +8,7 @@ import Dashboard from '../pages/admin/Dashboard';
 import Apartments from '../pages/admin/Apartments';
 import Periods from '../pages/admin/Periods';
 import Collections from '../pages/admin/Collections';
+import Users from '../pages/admin/Users';
 import OwnerDashboard from '../pages/owner/OwnerDashboard';
 
 function RootRedirect() {
@@ -34,6 +35,7 @@ export default function AppRoutes() {
           <Route path="apartamentos" element={<Apartments />} />
           <Route path="periodos" element={<Periods />} />
           <Route path="cobros" element={<Collections />} />
+          <Route path="usuarios" element={<Users />} />
         </Route>
 
         {/* Owner Routes */}

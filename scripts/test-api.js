@@ -109,7 +109,7 @@ async function main() {
     await req('PATCH', `/api/admin/users/${tmpUser.id}`, {
       token: adminToken, body: { is_active: false }, expected: 200,
     });
-    const deactivatedLogin = await req('POST', '/api/auth/login', {
+    await req('POST', '/api/auth/login', {
       body: { username: 'tmp_test', password: 'tmp123' }, expected: 403,
     });
     check('login tras desactivación → 403', true, '');
@@ -152,7 +152,6 @@ async function main() {
   const settle = await req('POST', `/api/admin/periods/${created.data.period.id}/settle`, {
     token: adminToken, expected: 200,
   });
-  const settleMsg = settle.data.message || '';
   const sum = settle.data.allocations?.reduce((s, a) => s + a.amount_due_bs, 0);
   check('liquidar periodo → 200', sum !== undefined && Math.abs(sum - 1000) < 0.01, `Σ=Bs ${sum} (factura 1000)`);
   check('liquidación genera asignación PENDIENTE', (settle.data.allocations || []).some((a) => a.status === 'PENDIENTE'), '');

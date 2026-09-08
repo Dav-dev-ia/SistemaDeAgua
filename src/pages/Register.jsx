@@ -19,7 +19,7 @@ export default function Register() {
     e.preventDefault();
     const result = await register(form);
     if (result.ok) {
-      toast.success('¡Cuenta creada! Ya puedes iniciar sesión.');
+      toast.success('¡Cuenta creada! El administrador debe activarla antes de que puedas iniciar sesión.');
       navigate('/login');
     } else {
       toast.error(result.message);

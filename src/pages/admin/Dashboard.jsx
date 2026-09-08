@@ -77,13 +77,14 @@ export default function Dashboard() {
         </div>
         <div className="table-responsive">
           <table className="data-table">
+            <caption className="sr-only">Últimos periodos de facturación</caption>
             <thead>
               <tr>
-                <th>Periodo</th>
-                <th className="text-right">Monto Total (Bs)</th>
-                <th className="text-right">Consumo General (m³)</th>
-                <th className="text-center">Estado</th>
-                <th className="text-center">Acción</th>
+                <th scope="col">Periodo</th>
+                <th scope="col" className="text-right">Monto Total (Bs)</th>
+                <th scope="col" className="text-right">Consumo General (m³)</th>
+                <th scope="col" className="text-center">Estado</th>
+                <th scope="col" className="text-center">Acción</th>
               </tr>
             </thead>
             <tbody>

@@ -10,6 +10,7 @@ export default function Apartments() {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState(null);
   const defaultForm = { id: null, block: '', number: '', owner_name: '', phone: '', username: '', password: '', meter_code: '', is_inverted: false };
   const [form, setForm] = useState(defaultForm);
   const toast = useToast();
@@ -23,7 +24,7 @@ export default function Apartments() {
       ]);
       if (aptRes.data.ok) setApartments(aptRes.data.items);
       if (blkRes.data.ok) setBlocks(blkRes.data.items);
-    } catch (err) {
+    } catch {
       toast.error('Error al cargar departamentos');
     } finally {
       setLoading(false);
@@ -59,6 +60,25 @@ export default function Apartments() {
       is_inverted: apt.meter?.is_inverted || false
     });
     setShowModal(true);
+  };
+
+  const toggleUserActive = async (apt) => {
+    if (!apt.user) return;
+    if (togglingId) return;
+    setTogglingId(apt.user.id);
+    try {
+      const { data } = await client.patch(`/admin/users/${apt.user.id}`, { is_active: !apt.user.is_active });
+      if (data.ok) {
+        toast.success(apt.user.is_active ? 'Acceso desactivado' : 'Acceso activado');
+        loadData();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Error al cambiar el estado de acceso');
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -119,9 +139,9 @@ export default function Apartments() {
       <div className="filter-bar">
         <div className="search-bar" style={{ flex: 1 }}>
           <i className="bi bi-search" />
-          <input className="form-control" placeholder="Buscar por nombre, departamento, bloque..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="form-control" placeholder="Buscar por nombre, departamento, bloque..." aria-label="Buscar departamentos" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="form-control form-select" style={{ maxWidth: '200px' }} value={blockFilter} onChange={e => setBlockFilter(e.target.value)}>
+        <select className="form-control form-select" style={{ maxWidth: '200px' }} aria-label="Filtrar por bloque" value={blockFilter} onChange={e => setBlockFilter(e.target.value)}>
           <option value="">Todos los bloques</option>
           {blocks.map(b => <option key={b} value={b}>Bloque {b}</option>)}
         </select>
@@ -130,15 +150,16 @@ export default function Apartments() {
       <div className="glass-card">
         <div className="table-responsive">
           <table className="data-table">
+            <caption className="sr-only">Lista de departamentos</caption>
             <thead>
               <tr>
-                <th>Bloque</th>
-                <th>Dpto</th>
-                <th>Adjudicatario</th>
-                <th>Teléfono</th>
-                <th>Medidor</th>
-                <th className="text-center">Estado</th>
-                <th className="text-center">Acciones</th>
+                <th scope="col">Bloque</th>
+                <th scope="col">Dpto</th>
+                <th scope="col">Adjudicatario</th>
+                <th scope="col">Teléfono</th>
+                <th scope="col">Medidor</th>
+                <th scope="col" className="text-center">Estado</th>
+                <th scope="col" className="text-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -159,16 +180,27 @@ export default function Apartments() {
                     ) : <span className="text-muted text-sm">Sin medidor</span>}
                   </td>
                   <td className="center">
-                    <span className={`status-badge ${apt.is_active ? 'paid' : 'pending'}`}>
-                      {apt.is_active ? 'Activo' : 'Inactivo'}
+                    <span className={`status-badge ${apt.user?.is_active ? 'paid' : 'pending'}`}>
+                      {apt.user ? (apt.user.is_active ? 'Activo' : 'Inactivo') : 'Sin usuario'}
                     </span>
                   </td>
                   <td className="center">
                     <div className="flex gap-2 items-center" style={{ justifyContent: 'center' }}>
-                      <button className="btn btn-outline btn-sm" onClick={() => openEdit(apt)} title="Editar">
+                      <button className="btn btn-outline btn-sm" onClick={() => openEdit(apt)} title="Editar" aria-label={`Editar departamento ${apt.block}-${apt.number}`}>
                         <i className="bi bi-pencil" />
                       </button>
-                      <button className="btn btn-outline btn-sm" onClick={() => handleDelete(apt.id)} title="Eliminar" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                      {apt.user && (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => toggleUserActive(apt)}
+                          disabled={togglingId === apt.user.id}
+                          title={apt.user.is_active ? 'Desactivar acceso' : 'Activar acceso'}
+                          aria-label={`${apt.user.is_active ? 'Desactivar' : 'Activar'} acceso de ${apt.user.username}`}
+                        >
+                          <i className={`bi bi-${apt.user.is_active ? 'person-x' : 'person-check'}`} />
+                        </button>
+                      )}
+                      <button className="btn btn-outline btn-sm" onClick={() => handleDelete(apt.id)} title="Eliminar" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} aria-label={`Eliminar departamento ${apt.block}-${apt.number}`}>
                         <i className="bi bi-trash" />
                       </button>
                     </div>

@@ -160,6 +160,48 @@ export default function OwnerDashboard() {
                 </p>
               </div>
             </div>
+            {latest.breakdown && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                <p className="text-xs text-muted mb-2">¿Cómo se calculó este monto?</p>
+                <div className="table-responsive">
+                  <table className="data-table">
+                    <caption className="sr-only">Desglose del cálculo del recibo</caption>
+                    <tbody>
+                      <tr>
+                        <th scope="row">Precio por metro cúbico</th>
+                        <td className="numeric">{latest.breakdown.price_per_m3} Bs</td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Coeficiente de tu medidor</th>
+                        <td className="numeric">{latest.breakdown.coefficient}</td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Consumo efectivo (consumo × coeficiente)</th>
+                        <td className="numeric">{latest.breakdown.effective_consumption_m3} m³</td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Base de consumo ({latest.breakdown.price_per_m3} Bs × {latest.breakdown.consumption_m3} m³)</th>
+                        <td className="numeric">{latest.breakdown.base_bs} Bs</td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Parte común (factura compartida)</th>
+                        <td className="numeric">{latest.breakdown.common_share_bs} Bs</td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Factura del inmueble del periodo</th>
+                        <td className="numeric">{latest.breakdown.invoice_bs} Bs</td>
+                      </tr>
+                      {latest.breakdown.common_difference_m3 > 0 && (
+                        <tr>
+                          <th scope="row">Diferencia medidor general vs. sumas de medidores</th>
+                          <td className="numeric">{latest.breakdown.common_difference_m3} m³</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -175,7 +217,7 @@ export default function OwnerDashboard() {
           </div>
           <div className="glass-card-body">
             <div style={{ height: '280px' }}>
-              <Bar data={chartData} options={chartOptions} />
+              <Bar data={chartData} options={chartOptions} role="img" aria-label={`Gráfico de consumo de los últimos ${allocations.length} periodos`} />
             </div>
           </div>
         </div>
@@ -191,14 +233,15 @@ export default function OwnerDashboard() {
         </div>
         <div className="table-responsive">
           <table className="data-table">
+            <caption className="sr-only">Historial de periodos de tu departamento</caption>
             <thead>
               <tr>
-                <th>Periodo</th>
-                <th className="text-right">Consumo (m³)</th>
-                <th className="text-right">Monto (Bs)</th>
-                <th className="text-right">Pagado (Bs)</th>
-                <th className="text-right">Pendiente (Bs)</th>
-                <th className="text-center">Estado</th>
+                <th scope="col">Periodo</th>
+                <th scope="col" className="text-right">Consumo (m³)</th>
+                <th scope="col" className="text-right">Monto (Bs)</th>
+                <th scope="col" className="text-right">Pagado (Bs)</th>
+                <th scope="col" className="text-right">Pendiente (Bs)</th>
+                <th scope="col" className="text-center">Estado</th>
               </tr>
             </thead>
             <tbody>

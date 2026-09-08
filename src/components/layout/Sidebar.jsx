@@ -9,6 +9,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/apartamentos', icon: 'bi-building', label: 'Departamentos' },
     { to: '/admin/periodos', icon: 'bi-calendar3', label: 'Periodos' },
     { to: '/admin/cobros', icon: 'bi-cash-stack', label: 'Cobro Rápido' },
+    { to: '/admin/usuarios', icon: 'bi-people', label: 'Usuarios' },
   ];
 
   const ownerLinks = [
