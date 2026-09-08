@@ -11,15 +11,40 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ─── Tipos enumerados para evitar estados inválidos ───────────────────────────
+enum Role {
+  OWNER
+  ADMIN
+}
+
+enum PeriodStatus {
+  OPEN
+  CALCULATED
+  CLOSED
+}
+
+enum AllocationStatus {
+  PENDIENTE
+  PARCIAL
+  PAGADO
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+  QR
+}
+
 model User {
   id            Int        @id @default(autoincrement())
   username      String     @unique
   fullName      String
   passwordHash  String
-  role          String     @default("OWNER")
+  role          Role       @default(OWNER)
   isActive      Boolean    @default(true)
   apartmentId   Int?
   createdAt     DateTime   @default(now())
+  lastLoginAt   DateTime?
 
   apartment     Apartment? @relation(fields: [apartmentId], references: [id])
   payments      Payment[]  @relation("UserPayments")
@@ -64,14 +89,14 @@ model Meter {
 model BillingPeriod {
   id                           Int        @id @default(autoincrement())
   code                         String     @unique
-  totalCommonAmountBs          Float      @default(0)
-  generalMetersJson            String?    
+  totalCommonAmountBs          Decimal    @default(0) @db.Decimal(12,2)
+  generalMetersJson            String?
   generalTotalConsumptionM3    Float      @default(0)
   totalIndividualConsumptionM3 Float      @default(0)
   commonDifferenceM3           Float      @default(0)
-  distributedTotalBs           Float      @default(0)
-  status                       String     @default("OPEN")
-  notesJson                    String?    
+  distributedTotalBs           Decimal    @default(0) @db.Decimal(12,2)
+  status                       PeriodStatus @default(OPEN)
+  notesJson                    String?
   closedAt                     DateTime?
   createdAt                    DateTime   @default(now())
 
@@ -101,17 +126,18 @@ model Reading {
 }
 
 model Allocation {
-  id              Int        @id @default(autoincrement())
+  id              Int              @id @default(autoincrement())
   periodId        Int
   apartmentId     Int
-  consumptionM3   Float      @default(0)
-  percentageShare Float      @default(0)
-  amountDueBs     Float      @default(0)
-  amountPaidBs    Float      @default(0)
-  status          String     @default("PENDIENTE")
+  consumptionM3   Float            @default(0)
+  effectiveM3     Float            @default(0)
+  percentageShare Float            @default(0)
+  amountDueBs     Decimal          @default(0) @db.Decimal(12,2)
+  amountPaidBs    Decimal          @default(0) @db.Decimal(12,2)
+  status          AllocationStatus @default(PENDIENTE)
   breakdownJson   String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   period          BillingPeriod @relation(fields: [periodId], references: [id])
   apartment       Apartment     @relation(fields: [apartmentId], references: [id])
@@ -122,14 +148,14 @@ model Allocation {
 }
 
 model Payment {
-  id                   Int        @id @default(autoincrement())
+  id                   Int           @id @default(autoincrement())
   allocationId         Int
-  amountBs             Float
-  paymentMethod        String     @default("EFECTIVO")
+  amountBs             Decimal       @default(0) @db.Decimal(12,2)
+  paymentMethod        PaymentMethod @default(EFECTIVO)
   reference            String?
   notesJson            String?
   registeredByUserId   Int?
-  createdAt            DateTime   @default(now())
+  createdAt            DateTime      @default(now())
 
   allocation           Allocation @relation(fields: [allocationId], references: [id])
   registeredByUser     User?      @relation("UserPayments", fields: [registeredByUserId], references: [id])

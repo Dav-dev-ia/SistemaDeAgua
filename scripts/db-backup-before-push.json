@@ -1,0 +1,52 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "role": "ADMIN",
+      "isActive": true
+    },
+    {
+      "id": 5,
+      "username": "juan",
+      "role": "OWNER",
+      "isActive": true
+    }
+  ],
+  "periodStatuses": [
+    {
+      "id": 1,
+      "status": "CALCULATED"
+    },
+    {
+      "id": 2,
+      "status": "CALCULATED"
+    },
+    {
+      "id": 3,
+      "status": "CALCULATED"
+    }
+  ],
+  "allocationStatuses": [
+    {
+      "id": 3,
+      "status": "PAGADO"
+    },
+    {
+      "id": 4,
+      "status": "PAGADO"
+    }
+  ],
+  "paymentMethods": [
+    {
+      "id": 3,
+      "paymentMethod": "EFECTIVO",
+      "amountBs": "5000"
+    },
+    {
+      "id": 4,
+      "paymentMethod": "EFECTIVO",
+      "amountBs": "1200"
+    }
+  ]
+}
