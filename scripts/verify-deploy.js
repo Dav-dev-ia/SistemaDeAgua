@@ -9,7 +9,8 @@
  *   node scripts/verify-deploy.js https://tu-url-custom.vercel.app
  * ─────────────────────────────────────────────────────────────────────────────
  */
-require('dotenv').config();
+module.paths.unshift(require('path').join(__dirname, '..', 'api', 'node_modules'));
+require('dotenv').config({ path: require('path').join(__dirname, '..', 'api', '.env') });
 
 const BASE_URL = process.argv[2] || 'https://proyectoagua2.vercel.app';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin2026!';

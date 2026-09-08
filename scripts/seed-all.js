@@ -1,5 +1,7 @@
-const prisma = require('../lib/prisma');
-const { withRetry } = require('../lib/prisma');
+module.paths.unshift(require('path').join(__dirname, '..', 'api', 'node_modules'));
+require('dotenv').config({ path: require('path').join(__dirname, '..', 'api', '.env') });
+const prisma = require('../api/lib/prisma');
+const { withRetry } = require('../api/lib/prisma');
 const bcrypt = require('bcryptjs');
 
 

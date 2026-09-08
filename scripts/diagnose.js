@@ -2,7 +2,8 @@
  * SCRIPT DE DIAGNÓSTICO - diagnose.js
  * Verifica el estado completo del sistema AguaPago
  */
-require('dotenv').config();
+module.paths.unshift(require('path').join(__dirname, '..', 'api', 'node_modules'));
+require('dotenv').config({ path: require('path').join(__dirname, '..', 'api', '.env') });
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');

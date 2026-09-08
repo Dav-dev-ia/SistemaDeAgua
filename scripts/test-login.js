@@ -1,8 +1,9 @@
-require('dotenv').config();
+module.paths.unshift(require('path').join(__dirname, '..', 'api', 'node_modules'));
+require('dotenv').config({ path: require('path').join(__dirname, '..', 'api', '.env') });
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const prisma = require('../lib/prisma');
-const { withRetry } = require('../lib/prisma');
+const prisma = require('../api/lib/prisma');
+const { withRetry } = require('../api/lib/prisma');
 
 async function testCredentials(username, password) {
   console.log(`\nProbando login para: ${username}...`);
