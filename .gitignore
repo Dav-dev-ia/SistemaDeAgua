@@ -25,3 +25,8 @@ dist-ssr
 
 .vercel
 .env*
+
+# SQLite leftovers (no se usa; la BD es PostgreSQL)
+*.db
+*.sqlite
+*.sqlite3
