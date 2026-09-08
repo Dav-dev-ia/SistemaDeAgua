@@ -31,6 +31,12 @@ const allowedOrigins = [
   /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
 ];
 
+const extraOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter((o) => o.length > 0);
+if (extraOrigins.length > 0) allowedOrigins.push(...extraOrigins);
+
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true);
